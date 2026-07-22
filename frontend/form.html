@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">服务商入驻 - 中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <div class="logo">中</div>
+            <span>社区服务中介平台</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">服务商管理</a>
+            <a href="form.html" class="active">新增入驻</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <div class="breadcrumb">
+            <a href="index.html">服务商管理</a>
+            <span class="sep">/</span>
+            <span id="breadcrumb-title">服务商入驻</span>
+        </div>
+
+        <div class="card" style="max-width:800px;margin:0 auto;">
+            <div class="card-title">
+                <span id="form-title">服务商入驻登记</span>
+            </div>
+
+            <form id="provider-form" onsubmit="return false;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">姓名<span class="required">*</span></label>
+                        <input type="text" class="form-input" id="name" placeholder="请输入真实姓名">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">手机号<span class="required">*</span></label>
+                        <input type="tel" class="form-input" id="phone" placeholder="请输入11位手机号">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">期望职业类型<span class="required">*</span></label>
+                        <select class="form-select" id="professionType">
+                            <option value="">请选择职业类型</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">服务城市<span class="required">*</span></label>
+                        <input type="text" class="form-input" id="city" placeholder="如：北京、上海">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">技能标签</label>
+                    <div id="skill-options" style="display:flex;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid #e8e8e8;border-radius:4px;background:#fafafa;">
+                    </div>
+                    <div style="color:#999;font-size:12px;margin-top:6px;">选择相关技能，可多选</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">自定义技能</label>
+                    <input type="text" class="form-input" id="customSkill" placeholder="输入自定义技能后按回车添加">
+                </div>
+                <div class="form-group">
+                    <div id="selected-skills" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;"></div>
+                </div>
+
+                <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid #f0f0f0;">
+                    <button type="button" class="btn btn-lg" onclick="goBack()">返回</button>
+                    <button type="button" class="btn btn-primary btn-lg" id="submit-btn" onclick="submitForm()">提交</button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <script src="js/common.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const providerId = urlParams.get('id');
+        const isEdit = !!providerId;
+
+        const skillOptions = {
+            BABYSITTER: ['做饭', '带孩子', '打扫卫生', '辅食制作', '早教启蒙'],
+            REPAIRMAN: ['水电维修', '家电维修', '管道疏通', '家具安装', '墙面修补'],
+            MATERNAL_NURSE: ['新生儿护理', '产妇护理', '月子餐', '催乳', '产后恢复'],
+            CLEANER: ['日常保洁', '深度保洁', '开荒保洁', '玻璃清洁', '油烟机清洗'],
+            COOK: ['家常菜', '川菜', '粤菜', '烘焙', '营养餐'],
+            DRIVER: ['C1驾照', '长途驾驶', '商务接待', '代驾', '货运'],
+            NURSING_WORKER: ['老人护理', '病人护理', '康复训练', '压疮护理', '鼻饲护理'],
+            TUTOR: ['语文辅导', '数学辅导', '英语辅导', '作业辅导', '奥数辅导']
+        };
+
+        let selectedSkills = [];
+        let currentProfession = '';
+
+        async function init() {
+            const professions = await request('/dict/profession-types');
+            const profSel = document.getElementById('professionType');
+            professions.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.value;
+                opt.textContent = p.label;
+                profSel.appendChild(opt);
+            });
+
+            document.getElementById('professionType').addEventListener('change', (e) => {
+                currentProfession = e.target.value;
+                renderSkillOptions();
+            });
+
+            document.getElementById('customSkill').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = e.target.value.trim();
+                    if (val && !selectedSkills.includes(val)) {
+                        selectedSkills.push(val);
+                        renderSelectedSkills();
+                    }
+                    e.target.value = '';
+                }
+            });
+
+            if (isEdit) {
+                document.getElementById('page-title').textContent = '编辑服务商 - 中介平台';
+                document.getElementById('breadcrumb-title').textContent = '编辑服务商';
+                document.getElementById('form-title').textContent = '编辑服务商资料';
+                document.getElementById('submit-btn').textContent = '保存修改';
+                await loadProviderData();
+            }
+        }
+
+        async function loadProviderData() {
+            const p = await request(`/providers/${providerId}`);
+            document.getElementById('name').value = p.name || '';
+            document.getElementById('phone').value = p.phone || '';
+            document.getElementById('professionType').value = p.professionType || '';
+            document.getElementById('city').value = p.city || '';
+            currentProfession = p.professionType || '';
+            selectedSkills = [...(p.skillTags || [])];
+            renderSkillOptions();
+            renderSelectedSkills();
+        }
+
+        function renderSkillOptions() {
+            const container = document.getElementById('skill-options');
+            const options = skillOptions[currentProfession] || [];
+            if (options.length === 0) {
+                container.innerHTML = '<span style="color:#999;">请先选择职业类型</span>';
+                return;
+            }
+            container.innerHTML = options.map(s => `
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;background:#fff;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;">
+                    <input type="checkbox" value="${s}" ${selectedSkills.includes(s) ? 'checked' : ''} onchange="toggleSkill('${s}')">
+                    ${s}
+                </label>
+            `).join('');
+        }
+
+        function toggleSkill(skill) {
+            const idx = selectedSkills.indexOf(skill);
+            if (idx > -1) {
+                selectedSkills.splice(idx, 1);
+            } else {
+                selectedSkills.push(skill);
+            }
+            renderSelectedSkills();
+        }
+
+        function removeSkill(skill) {
+            const idx = selectedSkills.indexOf(skill);
+            if (idx > -1) {
+                selectedSkills.splice(idx, 1);
+                renderSelectedSkills();
+                renderSkillOptions();
+            }
+        }
+
+        function renderSelectedSkills() {
+            const container = document.getElementById('selected-skills');
+            if (selectedSkills.length === 0) {
+                container.innerHTML = '<span style="color:#bbb;font-size:12px;">暂未选择技能标签</span>';
+                return;
+            }
+            container.innerHTML = selectedSkills.map(s => `
+                <span class="skill-tag" style="padding:4px 10px;cursor:pointer;" onclick="removeSkill('${s}')" title="点击移除">
+                    ${s} ×
+                </span>
+            `).join('');
+        }
+
+        async function submitForm() {
+            const name = document.getElementById('name').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const professionType = document.getElementById('professionType').value;
+            const city = document.getElementById('city').value.trim();
+
+            if (!name) { showToast('请输入姓名', 'error'); return; }
+            if (!phone || !/^1\d{10}$/.test(phone)) { showToast('请输入正确的11位手机号', 'error'); return; }
+            if (!professionType) { showToast('请选择职业类型', 'error'); return; }
+            if (!city) { showToast('请输入服务城市', 'error'); return; }
+
+            const body = { name, phone, professionType, city, skillTags: selectedSkills };
+
+            try {
+                if (isEdit) {
+                    await request(`/providers/${providerId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(body)
+                    });
+                    showToast('修改成功', 'success');
+                } else {
+                    await request('/providers', {
+                        method: 'POST',
+                        body: JSON.stringify(body)
+                    });
+                    showToast('入驻登记成功', 'success');
+                }
+                setTimeout(() => {
+                    if (isEdit) {
+                        window.location.href = `detail.html?id=${providerId}`;
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                }, 800);
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function goBack() {
+            if (isEdit) {
+                window.location.href = `detail.html?id=${providerId}`;
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

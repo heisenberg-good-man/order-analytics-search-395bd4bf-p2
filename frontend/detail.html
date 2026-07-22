@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务商详情 - 中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <div class="logo">中</div>
+            <span>社区服务中介平台</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">服务商管理</a>
+            <a href="form.html">新增入驻</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <div class="breadcrumb">
+            <a href="index.html">服务商管理</a>
+            <span class="sep">/</span>
+            <span id="breadcrumb-name">服务商详情</span>
+        </div>
+
+        <div id="detail-container">
+            <div class="empty">加载中...</div>
+        </div>
+    </main>
+
+    <script src="js/common.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const providerId = urlParams.get('id');
+
+        let currentProvider = null;
+        let verifyRecords = [];
+
+        async function loadDetail() {
+            if (!providerId) {
+                document.getElementById('detail-container').innerHTML =
+                    '<div class="empty">缺少服务商ID</div>';
+                return;
+            }
+
+            const [provider, records] = await Promise.all([
+                request(`/providers/${providerId}`),
+                request(`/providers/${providerId}/verify-records`)
+            ]);
+
+            currentProvider = provider;
+            verifyRecords = records;
+
+            document.getElementById('breadcrumb-name').textContent = provider.name;
+            renderDetail();
+        }
+
+        function renderDetail() {
+            const p = currentProvider;
+            const statusInfo = getStatusInfo(p.verifyStatus);
+            const completeness = p.completeness || 0;
+            const progClass = completeness >= 80 ? 'high' : completeness >= 50 ? 'mid' : 'low';
+            const skillTags = (p.skillTags || []).map(t => `<span class="skill-tag">${t}</span>`).join('');
+            const materials = (p.submittedMaterials || []).map(m => `<div class="material-item">${m}</div>`).join('');
+
+            let verifySectionClass = '';
+            if (p.verifyStatus === 'APPROVED') verifySectionClass = 'approved';
+            else if (p.verifyStatus === 'REJECTED') verifySectionClass = 'rejected';
+            else if (p.verifyStatus === 'PENDING') verifySectionClass = '';
+
+            let rejectReasonHtml = '';
+            if (p.verifyStatus === 'REJECTED' && p.rejectReason) {
+                rejectReasonHtml = `<div style="margin-top:8px;color:#ff4d4f;"><strong>驳回原因：</strong>${p.rejectReason}</div>`;
+            }
+
+            const canSubmit = p.verifyStatus === 'NOT_SUBMITTED' || p.verifyStatus === 'REJECTED';
+            const canApprove = p.verifyStatus === 'PENDING';
+            const canReject = p.verifyStatus === 'PENDING';
+
+            const timelineHtml = verifyRecords.length > 0
+                ? verifyRecords.map(r => {
+                    const cls = r.action === 'APPROVED' ? 'approved' :
+                                r.action === 'REJECTED' ? 'rejected' :
+                                r.action === 'PENDING' ? 'pending' : '';
+                    const statusInfo2 = getStatusInfo(r.action);
+                    return `
+                        <div class="timeline-item ${cls}">
+                            <div class="timeline-time">${formatTime(r.createTime)}</div>
+                            <div class="timeline-content">
+                                <span class="status-tag ${statusInfo2.class}">${statusInfo2.label}</span>
+                                ${r.remark || ''}
+                            </div>
+                            <div class="timeline-operator">操作人：${r.operator || '系统'}</div>
+                        </div>
+                    `;
+                }).join('')
+                : '<div class="empty">暂无审核记录</div>';
+
+            const container = document.getElementById('detail-container');
+            container.innerHTML = `
+                <div class="verification-section ${verifySectionClass}">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <span style="font-size:16px;font-weight:600;margin-right:12px;">实名认证状态</span>
+                            <span class="status-tag ${statusInfo.class}" style="font-size:14px;padding:4px 14px;">${statusInfo.label}</span>
+                        </div>
+                        <div class="action-bar">
+                            <button class="btn btn-primary" onclick="openSubmitModal()" ${canSubmit ? '' : 'disabled'}>
+                                ${p.verifyStatus === 'REJECTED' ? '重新提交认证' : '提交认证资料'}
+                            </button>
+                            <button class="btn btn-success" onclick="openApproveModal()" ${canApprove ? '' : 'disabled'}>
+                                审核通过
+                            </button>
+                            <button class="btn btn-danger" onclick="openRejectModal()" ${canReject ? '' : 'disabled'}>
+                                驳回审核
+                            </button>
+                            <button class="btn" onclick="editProvider()">编辑资料</button>
+                        </div>
+                    </div>
+                    ${rejectReasonHtml}
+                </div>
+
+                <div class="detail-grid">
+                    <div>
+                        <div class="card">
+                            <div class="card-title">基本信息</div>
+                            <ul class="info-list">
+                                <li><span class="label">服务商编号</span><span class="value">${p.id}</span></li>
+                                <li><span class="label">姓名</span><span class="value">${p.name}</span></li>
+                                <li><span class="label">手机号</span><span class="value">${p.phone}</span></li>
+                                <li><span class="label">职业类型</span><span class="value">${getProfessionLabel(p.professionType)}</span></li>
+                                <li><span class="label">服务城市</span><span class="value">${p.city}</span></li>
+                                <li><span class="label">技能标签</span><span class="value"><div class="skill-tags">${skillTags || '-'}</div></span></li>
+                                <li><span class="label">资料完整度</span>
+                                    <span class="value">
+                                        <div style="display:flex;align-items:center;gap:12px;max-width:300px;">
+                                            <div class="progress" style="flex:1;">
+                                                <div class="progress-bar ${progClass}" style="width:${completeness}%;"></div>
+                                            </div>
+                                            <span style="font-weight:600;">${completeness}%</span>
+                                        </div>
+                                    </span>
+                                </li>
+                                <li><span class="label">创建时间</span><span class="value">${formatTime(p.createTime)}</span></li>
+                                <li><span class="label">最近更新</span><span class="value">${formatTime(p.updateTime)}</span></li>
+                            </ul>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-title">身份信息摘要</div>
+                            <ul class="info-list">
+                                <li><span class="label">身份证姓名</span><span class="value">${p.idCardName || '-'}</span></li>
+                                <li><span class="label">身份证号</span><span class="value">${maskIdCard(p.idCardNo)}</span></li>
+                                <li><span class="label">身份证地址</span><span class="value">${p.idCardAddress || '-'}</span></li>
+                            </ul>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-title">提交材料状态</div>
+                            ${materials ? `<div class="material-list">${materials}</div>` : '<div class="empty">尚未提交任何材料</div>'}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="card">
+                            <div class="card-title">审核记录</div>
+                            <div class="timeline">${timelineHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openSubmitModal() {
+            const p = currentProvider;
+            const html = `
+                <div class="form-group">
+                    <label class="form-label">身份证姓名<span class="required">*</span></label>
+                    <input type="text" class="form-input" id="submit-name" value="${p.idCardName || p.name || ''}" placeholder="请输入身份证姓名">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">身份证号<span class="required">*</span></label>
+                    <input type="text" class="form-input" id="submit-idcard" value="${p.idCardNo || ''}" placeholder="请输入18位身份证号">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">身份证地址<span class="required">*</span></label>
+                    <input type="text" class="form-input" id="submit-address" value="${p.idCardAddress || ''}" placeholder="请输入身份证上的地址">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">提交材料</label>
+                    <div style="padding:8px;border:1px dashed #d9d9d9;border-radius:4px;background:#fafafa;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">
+                            <input type="checkbox" class="mat-check" value="身份证正面" checked> 身份证正面照
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">
+                            <input type="checkbox" class="mat-check" value="身份证反面" checked> 身份证反面照
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">
+                            <input type="checkbox" class="mat-check" value="手持身份证照"> 手持身份证照
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" class="mat-check" value="职业资格证"> 职业资格证书
+                        </label>
+                    </div>
+                    <div style="color:#999;font-size:12px;margin-top:6px;">模拟提交，实际项目中上传图片</div>
+                </div>
+            `;
+
+            const modal = showModal('提交实名认证资料', html, async (m) => {
+                const idCardName = m.querySelector('#submit-name').value.trim();
+                const idCardNo = m.querySelector('#submit-idcard').value.trim();
+                const idCardAddress = m.querySelector('#submit-address').value.trim();
+                const materials = Array.from(m.querySelectorAll('.mat-check:checked')).map(c => c.value);
+
+                if (!idCardName) { showToast('请输入身份证姓名', 'error'); return false; }
+                if (!idCardNo || idCardNo.length < 15) { showToast('请输入有效的身份证号', 'error'); return false; }
+                if (!idCardAddress) { showToast('请输入身份证地址', 'error'); return false; }
+                if (materials.length === 0) { showToast('请至少选择一项提交材料', 'error'); return false; }
+
+                try {
+                    await request(`/providers/${providerId}/verify/submit`, {
+                        method: 'POST',
+                        body: JSON.stringify({ idCardName, idCardNo, idCardAddress, submittedMaterials: materials })
+                    });
+                    showToast('提交成功，等待审核', 'success');
+                    loadDetail();
+                    return true;
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    return false;
+                }
+            }, '提交认证');
+        }
+
+        function openApproveModal() {
+            const html = `
+                <div class="form-group">
+                    <label class="form-label">审核备注</label>
+                    <textarea class="form-textarea" id="approve-remark" placeholder="选填，输入审核通过的备注信息"></textarea>
+                </div>
+                <div style="color:#52c41a;font-size:13px;">确认通过该服务商的实名认证申请？</div>
+            `;
+            showModal('审核通过', html, async (m) => {
+                const remark = m.querySelector('#approve-remark').value.trim();
+                try {
+                    await request(`/providers/${providerId}/verify/approve`, {
+                        method: 'POST',
+                        body: JSON.stringify({ operator: '管理员', remark: remark || '审核通过' })
+                    });
+                    showToast('审核通过', 'success');
+                    loadDetail();
+                    return true;
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    return false;
+                }
+            }, '确认通过');
+        }
+
+        function openRejectModal() {
+            const html = `
+                <div class="form-group">
+                    <label class="form-label">驳回原因<span class="required">*</span></label>
+                    <textarea class="form-textarea" id="reject-reason" placeholder="请输入驳回原因，以便服务商修改后重新提交"></textarea>
+                </div>
+                <div style="color:#ff4d4f;font-size:13px;">驳回后服务商可修改资料重新提交。</div>
+            `;
+            showModal('驳回审核', html, async (m) => {
+                const remark = m.querySelector('#reject-reason').value.trim();
+                if (!remark) { showToast('请输入驳回原因', 'error'); return false; }
+                try {
+                    await request(`/providers/${providerId}/verify/reject`, {
+                        method: 'POST',
+                        body: JSON.stringify({ operator: '管理员', remark })
+                    });
+                    showToast('已驳回', 'success');
+                    loadDetail();
+                    return true;
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    return false;
+                }
+            }, '确认驳回');
+        }
+
+        function editProvider() {
+            window.location.href = `form.html?id=${providerId}`;
+        }
+
+        loadDetail();
+    </script>
+</body>
+</html>

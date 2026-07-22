@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务商管理 - 中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <div class="logo">中</div>
+            <span>社区服务中介平台</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html" class="active">服务商管理</a>
+            <a href="form.html">新增入驻</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <h1 class="page-title">服务商管理</h1>
+
+        <div id="stats-container"></div>
+
+        <div class="card">
+            <div class="card-title">
+                <span>服务商列表</span>
+                <button class="btn btn-primary" onclick="goToCreate()">+ 新增服务商</button>
+            </div>
+
+            <div class="filter-bar">
+                <div class="form-group search-group">
+                    <label class="form-label">关键词搜索</label>
+                    <input type="text" class="form-input" id="keyword" placeholder="姓名 / 手机号 / 城市 / 技能">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">认证状态</label>
+                    <select class="form-select" id="verifyStatus">
+                        <option value="">全部状态</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">职业类型</label>
+                    <select class="form-select" id="professionType">
+                        <option value="">全部职业</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-primary" onclick="loadProviders()">搜索</button>
+                    <button class="btn" onclick="resetFilters()" style="margin-left:8px;">重置</button>
+                </div>
+            </div>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>服务商编号</th>
+                        <th>姓名</th>
+                        <th>手机号</th>
+                        <th>职业类型</th>
+                        <th>服务城市</th>
+                        <th>技能标签</th>
+                        <th>认证状态</th>
+                        <th>资料完整度</th>
+                        <th>最近更新</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="provider-list">
+                    <tr><td colspan="10" class="empty">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="js/common.js"></script>
+    <script>
+        async function initDicts() {
+            const [professions, statuses] = await Promise.all([
+                request('/dict/profession-types'),
+                request('/dict/verify-statuses')
+            ]);
+
+            const profSel = document.getElementById('professionType');
+            professions.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.value;
+                opt.textContent = p.label;
+                profSel.appendChild(opt);
+            });
+
+            const statusSel = document.getElementById('verifyStatus');
+            statuses.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.value;
+                opt.textContent = s.label;
+                statusSel.appendChild(opt);
+            });
+        }
+
+        async function loadStatistics() {
+            const stats = await request('/statistics');
+            const container = document.getElementById('stats-container');
+            const profStats = stats.professionStats || {};
+
+            let profHtml = '';
+            for (const [key, val] of Object.entries(profStats)) {
+                profHtml += `<div class="profession-stat"><span class="name">${getProfessionLabel(key)}</span><span class="num">${val}人</span></div>`;
+            }
+
+            container.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card stat-total">
+                        <div class="stat-label">总服务商数</div>
+                        <div class="stat-value">${stats.total}</div>
+                    </div>
+                    <div class="stat-card stat-pending">
+                        <div class="stat-label">待审核</div>
+                        <div class="stat-value">${stats.pending}</div>
+                    </div>
+                    <div class="stat-card stat-approved">
+                        <div class="stat-label">已认证</div>
+                        <div class="stat-value">${stats.approved}</div>
+                    </div>
+                    <div class="stat-card stat-rejected">
+                        <div class="stat-label">已驳回</div>
+                        <div class="stat-value">${stats.rejected}</div>
+                    </div>
+                    <div class="stat-card stat-not-submitted">
+                        <div class="stat-label">未提交</div>
+                        <div class="stat-value">${stats.notSubmitted}</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span>各职业人数统计</span></div>
+                    <div class="profession-stats">${profHtml || '<span style="color:#999;">暂无数据</span>'}</div>
+                </div>
+            `;
+        }
+
+        async function loadProviders() {
+            const keyword = document.getElementById('keyword').value.trim();
+            const verifyStatus = document.getElementById('verifyStatus').value;
+            const professionType = document.getElementById('professionType').value;
+
+            const params = new URLSearchParams();
+            if (keyword) params.append('keyword', keyword);
+            if (verifyStatus) params.append('verifyStatus', verifyStatus);
+            if (professionType) params.append('professionType', professionType);
+
+            const list = await request('/providers?' + params.toString());
+            const tbody = document.getElementById('provider-list');
+
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="empty">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = list.map(p => {
+                const statusInfo = getStatusInfo(p.verifyStatus);
+                const completeness = p.completeness || 0;
+                const progClass = completeness >= 80 ? 'high' : completeness >= 50 ? 'mid' : 'low';
+                const tags = (p.skillTags || []).map(t => `<span class="skill-tag">${t}</span>`).join('');
+
+                return `
+                    <tr>
+                        <td>${p.id}</td>
+                        <td>${p.name}</td>
+                        <td>${maskPhone(p.phone)}</td>
+                        <td>${getProfessionLabel(p.professionType)}</td>
+                        <td>${p.city}</td>
+                        <td><div class="skill-tags">${tags}</div></td>
+                        <td><span class="status-tag ${statusInfo.class}">${statusInfo.label}</span></td>
+                        <td style="min-width:140px;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div class="progress" style="flex:1;">
+                                    <div class="progress-bar ${progClass}" style="width:${completeness}%;"></div>
+                                </div>
+                                <span style="font-size:12px;color:#666;min-width:35px;">${completeness}%</span>
+                            </div>
+                        </td>
+                        <td style="font-size:12px;color:#999;">${formatTime(p.updateTime)}</td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn btn-sm" onclick="viewDetail('${p.id}')">详情</button>
+                                <button class="btn btn-sm" onclick="editProvider('${p.id}')">编辑</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function resetFilters() {
+            document.getElementById('keyword').value = '';
+            document.getElementById('verifyStatus').value = '';
+            document.getElementById('professionType').value = '';
+            loadProviders();
+        }
+
+        function goToCreate() {
+            window.location.href = 'form.html';
+        }
+
+        function viewDetail(id) {
+            window.location.href = 'detail.html?id=' + id;
+        }
+
+        function editProvider(id) {
+            window.location.href = 'form.html?id=' + id;
+        }
+
+        document.getElementById('keyword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadProviders();
+        });
+
+        (async function init() {
+            await initDicts();
+            await Promise.all([loadStatistics(), loadProviders()]);
+        })();
+    </script>
+</body>
+</html>
