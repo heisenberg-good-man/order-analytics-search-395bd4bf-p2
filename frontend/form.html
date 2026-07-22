@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="page-title">服务商入驻 - 中介平台</title>
+    <title id="page-title">入驻资料 - 中介平台</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
         </div>
         <nav class="nav-links">
             <a href="index.html">服务商管理</a>
-            <a href="form.html" class="active">新增入驻</a>
+            <a href="form.html" class="active">入驻资料</a>
         </nav>
     </header>
 
@@ -22,59 +22,193 @@
         <div class="breadcrumb">
             <a href="index.html">服务商管理</a>
             <span class="sep">/</span>
-            <span id="breadcrumb-title">服务商入驻</span>
+            <span id="breadcrumb-title">入驻资料</span>
         </div>
 
-        <div class="card" style="max-width:800px;margin:0 auto;">
-            <div class="card-title">
-                <span id="form-title">服务商入驻登记</span>
+        <div class="provider-profile" id="profile-header" style="display:none;">
+            <div class="profile-left">
+                <div class="avatar">服</div>
+                <div>
+                    <div class="profile-name" id="profile-name">-</div>
+                    <div class="profile-sub">
+                        <span id="profile-id" style="margin-right:16px;">-</span>
+                        <span class="status-tag" id="profile-status">-</span>
+                    </div>
+                </div>
+            </div>
+            <div class="profile-right">
+                <div class="profile-stat">
+                    <div class="label">资料完整度</div>
+                    <div class="value">
+                        <div class="progress" style="width:140px;">
+                            <div class="progress-bar" id="profile-progress" style="width:0;"></div>
+                        </div>
+                        <span id="profile-progress-text">0%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="new-provider-section">
+            <div class="card" style="max-width:600px;margin:20px auto;">
+                <div class="card-title"><span>快速创建资料草稿</span></div>
+                <form onsubmit="return false;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">姓名<span class="required">*</span></label>
+                            <input type="text" class="form-input" id="new-name" placeholder="请输入真实姓名">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">手机号<span class="required">*</span></label>
+                            <input type="tel" class="form-input" id="new-phone" placeholder="请输入11位手机号">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">期望职业<span class="required">*</span></label>
+                            <select class="form-select" id="new-profession">
+                                <option value="">请选择职业类型</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">服务城市<span class="required">*</span></label>
+                            <input type="text" class="form-input" id="new-city" placeholder="如：北京、上海">
+                        </div>
+                    </div>
+                    <div style="text-align:center;margin-top:16px;">
+                        <button type="button" class="btn btn-primary btn-lg" onclick="createDraft()">创建资料草稿</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="edit-section" style="display:none;">
+            <div id="missing-tip" class="missing-tip" style="display:none;">
+                <div class="missing-title">资料待完善，暂不能提交认证</div>
+                <div class="missing-list" id="missing-list"></div>
             </div>
 
-            <form id="provider-form" onsubmit="return false;">
+            <div id="reject-tip" class="reject-tip" style="display:none;">
+                <div class="reject-title">上次审核驳回</div>
+                <div class="reject-reason" id="reject-reason-text">-</div>
+                <div class="reject-hint">请修改后重新提交认证</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>基本信息</span>
+                    <span class="section-hint">可随时编辑保存</span>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">姓名<span class="required">*</span></label>
-                        <input type="text" class="form-input" id="name" placeholder="请输入真实姓名">
+                        <input type="text" class="form-input" id="edit-name">
                     </div>
                     <div class="form-group">
                         <label class="form-label">手机号<span class="required">*</span></label>
-                        <input type="tel" class="form-input" id="phone" placeholder="请输入11位手机号">
+                        <input type="tel" class="form-input" id="edit-phone">
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">期望职业类型<span class="required">*</span></label>
-                        <select class="form-select" id="professionType">
+                        <label class="form-label">主职业（期望职业）<span class="required">*</span></label>
+                        <select class="form-select" id="edit-profession">
                             <option value="">请选择职业类型</option>
                         </select>
+                        <div class="field-hint" id="profession-lock-hint" style="display:none;color:#fa8c16;font-size:12px;margin-top:4px;">
+                            已认证状态下职业不可修改，如需变更请联系平台
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">服务城市<span class="required">*</span></label>
-                        <input type="text" class="form-input" id="city" placeholder="如：北京、上海">
+                        <input type="text" class="form-input" id="edit-city">
+                        <div class="field-hint" id="city-lock-hint" style="display:none;color:#fa8c16;font-size:12px;margin-top:4px;">
+                            已认证状态下城市不可修改，如需变更请联系平台
+                        </div>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">技能标签</label>
-                    <div id="skill-options" style="display:flex;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid #e8e8e8;border-radius:4px;background:#fafafa;">
-                    </div>
-                    <div style="color:#999;font-size:12px;margin-top:6px;">选择相关技能，可多选</div>
+                    <div id="skill-options" class="skill-options-box"></div>
+                    <div class="field-hint">选择与职业相关的技能，可多选</div>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">自定义技能</label>
-                    <input type="text" class="form-input" id="customSkill" placeholder="输入自定义技能后按回车添加">
+                    <input type="text" class="form-input" id="custom-skill" placeholder="输入自定义技能后按回车添加">
                 </div>
                 <div class="form-group">
-                    <div id="selected-skills" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;"></div>
+                    <div id="selected-skills" class="selected-skills-box"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>身份认证</span>
+                    <span class="section-hint" id="id-section-status">提交后锁定，待审核期间不可修改</span>
                 </div>
 
-                <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid #f0f0f0;">
-                    <button type="button" class="btn btn-lg" onclick="goBack()">返回</button>
-                    <button type="button" class="btn btn-primary btn-lg" id="submit-btn" onclick="submitForm()">提交</button>
+                <div id="id-locked-tip" class="lock-tip" style="display:none;">
+                    <span class="lock-icon">🔒</span>
+                    身份信息已锁定，当前处于<span id="lock-status-text">待审核</span>状态
                 </div>
-            </form>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">身份证姓名<span class="required">*</span></label>
+                        <input type="text" class="form-input" id="id-name">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">身份证号<span class="required">*</span></label>
+                        <input type="text" class="form-input" id="id-card" placeholder="请输入18位身份证号">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">身份证地址<span class="required">*</span></label>
+                    <input type="text" class="form-input" id="id-address" placeholder="请输入身份证上的地址">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">提交材料清单</label>
+                    <div class="material-checklist">
+                        <label class="mat-check-item">
+                            <input type="checkbox" class="mat-check" value="身份证正面"> 身份证正面照
+                            <span class="mat-req">（必填）</span>
+                        </label>
+                        <label class="mat-check-item">
+                            <input type="checkbox" class="mat-check" value="身份证反面"> 身份证反面照
+                            <span class="mat-req">（必填）</span>
+                        </label>
+                        <label class="mat-check-item">
+                            <input type="checkbox" class="mat-check" value="手持身份证照"> 手持身份证照
+                        </label>
+                        <label class="mat-check-item">
+                            <input type="checkbox" class="mat-check" value="职业资格证"> 职业资格证书
+                        </label>
+                        <label class="mat-check-item">
+                            <input type="checkbox" class="mat-check" value="健康证"> 健康证明
+                        </label>
+                    </div>
+                    <div class="field-hint">勾选已准备好的材料，模拟上传</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span>审核记录</span></div>
+                <div id="verify-timeline" class="timeline">
+                    <div class="empty">暂无审核记录</div>
+                </div>
+            </div>
+
+            <div class="action-footer">
+                <button class="btn btn-lg" onclick="goBack()">返回</button>
+                <button class="btn btn-lg" onclick="saveDraft()">保存草稿</button>
+                <button class="btn btn-primary btn-lg" id="submit-btn" onclick="submitVerify()">提交认证</button>
+            </div>
         </div>
     </main>
 
@@ -82,7 +216,6 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const providerId = urlParams.get('id');
-        const isEdit = !!providerId;
 
         const skillOptions = {
             BABYSITTER: ['做饭', '带孩子', '打扫卫生', '辅食制作', '早教启蒙'],
@@ -95,25 +228,31 @@
             TUTOR: ['语文辅导', '数学辅导', '英语辅导', '作业辅导', '奥数辅导']
         };
 
+        let currentProvider = null;
         let selectedSkills = [];
         let currentProfession = '';
+        let verifyRecords = [];
 
         async function init() {
             const professions = await request('/dict/profession-types');
-            const profSel = document.getElementById('professionType');
+
+            const profSel = document.getElementById('new-profession');
+            const editProfSel = document.getElementById('edit-profession');
             professions.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.value;
-                opt.textContent = p.label;
-                profSel.appendChild(opt);
+                const opt1 = document.createElement('option');
+                opt1.value = p.value; opt1.textContent = p.label;
+                profSel.appendChild(opt1);
+                const opt2 = document.createElement('option');
+                opt2.value = p.value; opt2.textContent = p.label;
+                editProfSel.appendChild(opt2);
             });
 
-            document.getElementById('professionType').addEventListener('change', (e) => {
+            document.getElementById('edit-profession').addEventListener('change', (e) => {
                 currentProfession = e.target.value;
                 renderSkillOptions();
             });
 
-            document.getElementById('customSkill').addEventListener('keypress', (e) => {
+            document.getElementById('custom-skill').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const val = e.target.value.trim();
@@ -125,36 +264,101 @@
                 }
             });
 
-            if (isEdit) {
-                document.getElementById('page-title').textContent = '编辑服务商 - 中介平台';
-                document.getElementById('breadcrumb-title').textContent = '编辑服务商';
-                document.getElementById('form-title').textContent = '编辑服务商资料';
-                document.getElementById('submit-btn').textContent = '保存修改';
+            if (providerId) {
+                document.getElementById('breadcrumb-title').textContent = '入驻资料';
+                document.getElementById('new-provider-section').style.display = 'none';
+                document.getElementById('edit-section').style.display = 'block';
+                document.getElementById('profile-header').style.display = 'flex';
                 await loadProviderData();
             }
         }
 
+        async function createDraft() {
+            const name = document.getElementById('new-name').value.trim();
+            const phone = document.getElementById('new-phone').value.trim();
+            const professionType = document.getElementById('new-profession').value;
+            const city = document.getElementById('new-city').value.trim();
+
+            if (!name) { showToast('请输入姓名', 'error'); return; }
+            if (!phone || !/^1\d{10}$/.test(phone)) { showToast('请输入正确的11位手机号', 'error'); return; }
+            if (!professionType) { showToast('请选择期望职业', 'error'); return; }
+            if (!city) { showToast('请输入服务城市', 'error'); return; }
+
+            try {
+                const p = await request('/providers', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, phone, professionType, city, skillTags: [] })
+                });
+                showToast('资料草稿已创建', 'success');
+                setTimeout(() => {
+                    window.location.href = `form.html?id=${p.id}`;
+                }, 600);
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
         async function loadProviderData() {
-            const p = await request(`/providers/${providerId}`);
-            document.getElementById('name').value = p.name || '';
-            document.getElementById('phone').value = p.phone || '';
-            document.getElementById('professionType').value = p.professionType || '';
-            document.getElementById('city').value = p.city || '';
-            currentProfession = p.professionType || '';
-            selectedSkills = [...(p.skillTags || [])];
+            const [provider, records] = await Promise.all([
+                request(`/providers/${providerId}`),
+                request(`/providers/${providerId}/verify-records`)
+            ]);
+            currentProvider = provider;
+            verifyRecords = records;
+            currentProfession = provider.professionType || '';
+            selectedSkills = [...(provider.skillTags || [])];
+
+            renderProfile();
+            renderForm();
             renderSkillOptions();
             renderSelectedSkills();
+            renderVerifyTimeline();
+            checkMissingFields();
+            updateLockState();
+        }
+
+        function renderProfile() {
+            const p = currentProvider;
+            const statusInfo = getStatusInfo(p.verifyStatus);
+            document.getElementById('profile-name').textContent = p.name;
+            document.getElementById('profile-id').textContent = p.id;
+            const statusEl = document.getElementById('profile-status');
+            statusEl.textContent = statusInfo.label;
+            statusEl.className = 'status-tag ' + statusInfo.class;
+
+            const comp = p.completeness || 0;
+            const progClass = comp >= 80 ? 'high' : comp >= 50 ? 'mid' : 'low';
+            const progBar = document.getElementById('profile-progress');
+            progBar.style.width = comp + '%';
+            progBar.className = 'progress-bar ' + progClass;
+            document.getElementById('profile-progress-text').textContent = comp + '%';
+        }
+
+        function renderForm() {
+            const p = currentProvider;
+            document.getElementById('edit-name').value = p.name || '';
+            document.getElementById('edit-phone').value = p.phone || '';
+            document.getElementById('edit-profession').value = p.professionType || '';
+            document.getElementById('edit-city').value = p.city || '';
+            document.getElementById('id-name').value = p.idCardName || '';
+            document.getElementById('id-card').value = p.idCardNo || '';
+            document.getElementById('id-address').value = p.idCardAddress || '';
+
+            const mats = p.submittedMaterials || [];
+            document.querySelectorAll('.mat-check').forEach(cb => {
+                cb.checked = mats.includes(cb.value);
+            });
         }
 
         function renderSkillOptions() {
             const container = document.getElementById('skill-options');
             const options = skillOptions[currentProfession] || [];
             if (options.length === 0) {
-                container.innerHTML = '<span style="color:#999;">请先选择职业类型</span>';
+                container.innerHTML = '<span style="color:#999;">请先选择主职业</span>';
                 return;
             }
             container.innerHTML = options.map(s => `
-                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;background:#fff;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;">
+                <label class="skill-opt">
                     <input type="checkbox" value="${s}" ${selectedSkills.includes(s) ? 'checked' : ''} onchange="toggleSkill('${s}')">
                     ${s}
                 </label>
@@ -163,11 +367,8 @@
 
         function toggleSkill(skill) {
             const idx = selectedSkills.indexOf(skill);
-            if (idx > -1) {
-                selectedSkills.splice(idx, 1);
-            } else {
-                selectedSkills.push(skill);
-            }
+            if (idx > -1) selectedSkills.splice(idx, 1);
+            else selectedSkills.push(skill);
             renderSelectedSkills();
         }
 
@@ -187,53 +388,161 @@
                 return;
             }
             container.innerHTML = selectedSkills.map(s => `
-                <span class="skill-tag" style="padding:4px 10px;cursor:pointer;" onclick="removeSkill('${s}')" title="点击移除">
-                    ${s} ×
-                </span>
+                <span class="skill-tag skill-tag-removable" onclick="removeSkill('${s}')" title="点击移除">${s} ×</span>
             `).join('');
         }
 
-        async function submitForm() {
-            const name = document.getElementById('name').value.trim();
-            const phone = document.getElementById('phone').value.trim();
-            const professionType = document.getElementById('professionType').value;
-            const city = document.getElementById('city').value.trim();
+        function renderVerifyTimeline() {
+            const container = document.getElementById('verify-timeline');
+            if (verifyRecords.length === 0) {
+                container.innerHTML = '<div class="empty">暂无审核记录</div>';
+                return;
+            }
+            container.innerHTML = verifyRecords.map(r => {
+                const cls = r.action === 'APPROVED' ? 'approved' :
+                            r.action === 'REJECTED' ? 'rejected' :
+                            r.action === 'PENDING' ? 'pending' : '';
+                const s = getStatusInfo(r.action);
+                return `
+                    <div class="timeline-item ${cls}">
+                        <div class="timeline-time">${formatTime(r.createTime)}</div>
+                        <div class="timeline-content">
+                            <span class="status-tag ${s.class}">${s.label}</span>
+                            ${r.remark || ''}
+                        </div>
+                        <div class="timeline-operator">操作人：${r.operator || '系统'}</div>
+                    </div>
+                `;
+            }).join('');
+        }
 
-            if (!name) { showToast('请输入姓名', 'error'); return; }
-            if (!phone || !/^1\d{10}$/.test(phone)) { showToast('请输入正确的11位手机号', 'error'); return; }
-            if (!professionType) { showToast('请选择职业类型', 'error'); return; }
-            if (!city) { showToast('请输入服务城市', 'error'); return; }
+        function updateLockState() {
+            const p = currentProvider;
+            const isPending = p.verifyStatus === 'PENDING';
+            const isApproved = p.verifyStatus === 'APPROVED';
+            const isRejected = p.verifyStatus === 'REJECTED';
+            const idLocked = isPending || isApproved || isRejected;
+
+            document.getElementById('id-name').disabled = idLocked;
+            document.getElementById('id-card').disabled = idLocked;
+            document.getElementById('id-address').disabled = idLocked;
+            document.querySelectorAll('.mat-check').forEach(cb => cb.disabled = idLocked);
+
+            document.getElementById('edit-profession').disabled = isPending || isApproved;
+            document.getElementById('edit-city').disabled = isPending || isApproved;
+            document.querySelectorAll('#skill-options input, #selected-skills input').forEach(cb => cb.disabled = isPending || isApproved);
+
+            document.getElementById('profession-lock-hint').style.display = isApproved ? 'block' : 'none';
+            document.getElementById('city-lock-hint').style.display = isApproved ? 'block' : 'none';
+
+            if (idLocked) {
+                document.getElementById('id-locked-tip').style.display = 'block';
+                document.getElementById('lock-status-text').textContent = isPending ? '待审核' : (isApproved ? '已认证' : '已驳回');
+                document.getElementById('id-section-status').textContent = '已锁定';
+                if (p.idCardNo) {
+                    document.getElementById('id-card').value = maskIdCard(p.idCardNo);
+                }
+            } else {
+                document.getElementById('id-locked-tip').style.display = 'none';
+                document.getElementById('id-section-status').textContent = '提交后锁定，待审核期间不可修改';
+            }
+
+            const submitBtn = document.getElementById('submit-btn');
+            if (isPending) {
+                submitBtn.textContent = '待审核中';
+                submitBtn.disabled = true;
+            } else if (isApproved) {
+                submitBtn.textContent = '已通过认证';
+                submitBtn.disabled = true;
+            } else if (isRejected) {
+                submitBtn.textContent = '重新提交认证';
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.textContent = '提交认证';
+                submitBtn.disabled = false;
+            }
+        }
+
+        async function checkMissingFields() {
+            try {
+                const missing = await request(`/providers/${providerId}/missing-fields`);
+                const tipEl = document.getElementById('missing-tip');
+                const listEl = document.getElementById('missing-list');
+                if (missing.length > 0) {
+                    tipEl.style.display = 'block';
+                    listEl.innerHTML = missing.map(m => `<span class="missing-item">${m}</span>`).join('');
+                } else {
+                    tipEl.style.display = 'none';
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        async function saveDraft() {
+            const name = document.getElementById('edit-name').value.trim();
+            const phone = document.getElementById('edit-phone').value.trim();
+            const professionType = document.getElementById('edit-profession').value;
+            const city = document.getElementById('edit-city').value.trim();
 
             const body = { name, phone, professionType, city, skillTags: selectedSkills };
 
             try {
-                if (isEdit) {
-                    await request(`/providers/${providerId}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(body)
-                    });
-                    showToast('修改成功', 'success');
-                } else {
-                    await request('/providers', {
-                        method: 'POST',
-                        body: JSON.stringify(body)
-                    });
-                    showToast('入驻登记成功', 'success');
-                }
-                setTimeout(() => {
-                    if (isEdit) {
-                        window.location.href = `detail.html?id=${providerId}`;
-                    } else {
-                        window.location.href = 'index.html';
-                    }
-                }, 800);
+                await request(`/providers/${providerId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body)
+                });
+                showToast('草稿已保存', 'success');
+                await loadProviderData();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function submitVerify() {
+            const p = currentProvider;
+
+            if (p.verifyStatus === 'PENDING') {
+                showToast('当前处于待审核状态，不能重复提交', 'error');
+                return;
+            }
+            if (p.verifyStatus === 'APPROVED') {
+                showToast('已认证通过，无需重复提交', 'error');
+                return;
+            }
+
+            const idCardName = document.getElementById('id-name').value.trim();
+            const idCardNo = document.getElementById('id-card').value.trim();
+            const idCardAddress = document.getElementById('id-address').value.trim();
+            const materials = Array.from(document.querySelectorAll('.mat-check:checked')).map(c => c.value);
+
+            const errors = [];
+            if (!p.professionType) errors.push('请先完善期望职业');
+            if (!p.city) errors.push('请先完善服务城市');
+            if (!idCardName) errors.push('请输入身份证姓名');
+            if (!idCardNo || idCardNo.length < 15) errors.push('请输入有效的身份证号');
+            if (!idCardAddress) errors.push('请输入身份证地址');
+            if (materials.length === 0) errors.push('请至少勾选一项材料');
+            if (!materials.includes('身份证正面')) errors.push('缺少必填材料：身份证正面');
+            if (!materials.includes('身份证反面')) errors.push('缺少必填材料：身份证反面');
+
+            if (errors.length > 0) {
+                showToast(errors[0], 'error');
+                return;
+            }
+
+            try {
+                await request(`/providers/${providerId}/verify/submit`, {
+                    method: 'POST',
+                    body: JSON.stringify({ idCardName, idCardNo, idCardAddress, submittedMaterials: materials })
+                });
+                showToast('已提交认证，等待平台审核', 'success');
+                await loadProviderData();
             } catch (e) {
                 showToast(e.message, 'error');
             }
         }
 
         function goBack() {
-            if (isEdit) {
+            if (providerId) {
                 window.location.href = `detail.html?id=${providerId}`;
             } else {
                 window.location.href = 'index.html';

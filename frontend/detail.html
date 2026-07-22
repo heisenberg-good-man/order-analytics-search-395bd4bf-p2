@@ -14,7 +14,7 @@
         </div>
         <nav class="nav-links">
             <a href="index.html">服务商管理</a>
-            <a href="form.html">新增入驻</a>
+            <a href="form.html">入驻资料</a>
         </nav>
     </header>
 
@@ -45,16 +45,21 @@
                 return;
             }
 
-            const [provider, records] = await Promise.all([
-                request(`/providers/${providerId}`),
-                request(`/providers/${providerId}/verify-records`)
-            ]);
+            try {
+                const [provider, records] = await Promise.all([
+                    request(`/providers/${providerId}`),
+                    request(`/providers/${providerId}/verify-records`)
+                ]);
 
-            currentProvider = provider;
-            verifyRecords = records;
+                currentProvider = provider;
+                verifyRecords = records;
 
-            document.getElementById('breadcrumb-name').textContent = provider.name;
-            renderDetail();
+                document.getElementById('breadcrumb-name').textContent = provider.name;
+                renderDetail();
+            } catch (e) {
+                    document.getElementById('detail-container').innerHTML =
+                        `<div class="empty" style="color:#ff4d4f;">${e.message}</div>`;
+                }
         }
 
         function renderDetail() {
@@ -72,12 +77,14 @@
 
             let rejectReasonHtml = '';
             if (p.verifyStatus === 'REJECTED' && p.rejectReason) {
-                rejectReasonHtml = `<div style="margin-top:8px;color:#ff4d4f;"><strong>驳回原因：</strong>${p.rejectReason}</div>`;
+                rejectReasonHtml = `<div style="margin-top:8px;color:#ff4d4f;"><strong>驳回/退回原因：</strong>${p.rejectReason}</div>`;
             }
 
             const canSubmit = p.verifyStatus === 'NOT_SUBMITTED' || p.verifyStatus === 'REJECTED';
             const canApprove = p.verifyStatus === 'PENDING';
             const canReject = p.verifyStatus === 'PENDING';
+            const canSendBack = p.verifyStatus === 'PENDING';
+            const canEdit = p.verifyStatus !== 'PENDING';
 
             const timelineHtml = verifyRecords.length > 0
                 ? verifyRecords.map(r => {
@@ -101,12 +108,14 @@
             const container = document.getElementById('detail-container');
             container.innerHTML = `
                 <div class="verification-section ${verifySectionClass}">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
                         <div>
                             <span style="font-size:16px;font-weight:600;margin-right:12px;">实名认证状态</span>
                             <span class="status-tag ${statusInfo.class}" style="font-size:14px;padding:4px 14px;">${statusInfo.label}</span>
                         </div>
                         <div class="action-bar">
+                            <button class="btn" onclick="editProvider()" ${canEdit ? '' : 'disabled'}>编辑资料</button>
+                            <button class="btn btn-warning" onclick="openSendBackModal()" ${canSendBack ? '' : 'disabled'}>退回补充</button>
                             <button class="btn btn-primary" onclick="openSubmitModal()" ${canSubmit ? '' : 'disabled'}>
                                 ${p.verifyStatus === 'REJECTED' ? '重新提交认证' : '提交认证资料'}
                             </button>
@@ -116,7 +125,6 @@
                             <button class="btn btn-danger" onclick="openRejectModal()" ${canReject ? '' : 'disabled'}>
                                 驳回审核
                             </button>
-                            <button class="btn" onclick="editProvider()">编辑资料</button>
                         </div>
                     </div>
                     ${rejectReasonHtml}
@@ -200,15 +208,18 @@
                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">
                             <input type="checkbox" class="mat-check" value="手持身份证照"> 手持身份证照
                         </label>
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">
                             <input type="checkbox" class="mat-check" value="职业资格证"> 职业资格证书
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" class="mat-check" value="健康证"> 健康证明
                         </label>
                     </div>
                     <div style="color:#999;font-size:12px;margin-top:6px;">模拟提交，实际项目中上传图片</div>
                 </div>
             `;
 
-            const modal = showModal('提交实名认证资料', html, async (m) => {
+            showModal('提交实名认证资料', html, async (m) => {
                 const idCardName = m.querySelector('#submit-name').value.trim();
                 const idCardNo = m.querySelector('#submit-idcard').value.trim();
                 const idCardAddress = m.querySelector('#submit-address').value.trim();
@@ -247,7 +258,7 @@
                 try {
                     await request(`/providers/${providerId}/verify/approve`, {
                         method: 'POST',
-                        body: JSON.stringify({ operator: '管理员', remark: remark || '审核通过' })
+                        body: JSON.stringify({ operator: '平台审核员', remark: remark || '资料齐全，审核通过' })
                     });
                     showToast('审核通过', 'success');
                     loadDetail();
@@ -273,7 +284,7 @@
                 try {
                     await request(`/providers/${providerId}/verify/reject`, {
                         method: 'POST',
-                        body: JSON.stringify({ operator: '管理员', remark })
+                        body: JSON.stringify({ operator: '平台审核员', remark })
                     });
                     showToast('已驳回', 'success');
                     loadDetail();
@@ -283,6 +294,32 @@
                     return false;
                 }
             }, '确认驳回');
+        }
+
+        function openSendBackModal() {
+            const html = `
+                <div class="form-group">
+                    <label class="form-label">退回原因<span class="required">*</span></label>
+                    <textarea class="form-textarea" id="sendback-reason" placeholder="请输入退回补充资料的原因和具体要求"></textarea>
+                </div>
+                <div style="color:#fa8c16;font-size:13px;">退回后服务商可补充资料并重新提交，状态变为已驳回。</div>
+            `;
+            showModal('退回补充资料', html, async (m) => {
+                const remark = m.querySelector('#sendback-reason').value.trim();
+                if (!remark) { showToast('请输入退回原因', 'error'); return false; }
+                try {
+                    await request(`/providers/${providerId}/verify/send-back`, {
+                        method: 'POST',
+                        body: JSON.stringify({ operator: '平台审核员', remark })
+                    });
+                    showToast('已退回补充资料', 'success');
+                    loadDetail();
+                    return true;
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    return false;
+                }
+            }, '确认退回');
         }
 
         function editProvider() {

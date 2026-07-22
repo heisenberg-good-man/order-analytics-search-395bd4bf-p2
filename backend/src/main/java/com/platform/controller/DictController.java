@@ -3,6 +3,8 @@ package com.platform.controller;
 import com.platform.common.Result;
 import com.platform.enums.ProfessionType;
 import com.platform.enums.VerifyStatus;
+import com.platform.service.ProviderService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,6 +17,9 @@ import java.util.Map;
 @RestController
 @RequestMapping("/dict")
 public class DictController {
+
+    @Autowired
+    private ProviderService providerService;
 
     @GetMapping("/profession-types")
     public Result<List<Map<String, String>>> getProfessionTypes() {
@@ -38,5 +43,10 @@ public class DictController {
             list.add(item);
         }
         return Result.success(list);
+    }
+
+    @GetMapping("/cities")
+    public Result<List<String>> getCities() {
+        return Result.success(providerService.getAllCities());
     }
 }

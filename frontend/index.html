@@ -14,12 +14,12 @@
         </div>
         <nav class="nav-links">
             <a href="index.html" class="active">服务商管理</a>
-            <a href="form.html">新增入驻</a>
+            <a href="form.html">入驻资料</a>
         </nav>
     </header>
 
     <main class="app-main">
-        <h1 class="page-title">服务商管理</h1>
+        <h1 class="page-title">认证审核工作台</h1>
 
         <div id="stats-container"></div>
 
@@ -44,6 +44,12 @@
                     <label class="form-label">职业类型</label>
                     <select class="form-select" id="professionType">
                         <option value="">全部职业</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">服务城市</label>
+                    <select class="form-select" id="cityFilter">
+                        <option value="">全部城市</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -74,12 +80,34 @@
         </div>
     </main>
 
+    <div id="audit-drawer" class="drawer-mask" style="display:none;">
+        <div class="drawer">
+            <div class="drawer-header">
+                <span id="drawer-title">审核详情</span>
+                <button class="drawer-close" onclick="closeDrawer()">×</button>
+            </div>
+            <div class="drawer-body" id="drawer-body">
+                <div class="empty">加载中...</div>
+            </div>
+            <div class="drawer-footer" id="drawer-footer">
+                <button class="btn btn-lg" onclick="closeDrawer()">关闭</button>
+                <button class="btn btn-warning btn-lg" onclick="openSendBack()">退回补充资料</button>
+                <button class="btn btn-danger btn-lg" onclick="openReject()">驳回</button>
+                <button class="btn btn-success btn-lg" onclick="openApprove()">审核通过</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/common.js"></script>
     <script>
+        let currentProvider = null;
+        let currentRecords = [];
+
         async function initDicts() {
-            const [professions, statuses] = await Promise.all([
+            const [professions, statuses, cities] = await Promise.all([
                 request('/dict/profession-types'),
-                request('/dict/verify-statuses')
+                request('/dict/verify-statuses'),
+                request('/dict/cities')
             ]);
 
             const profSel = document.getElementById('professionType');
@@ -97,16 +125,30 @@
                 opt.textContent = s.label;
                 statusSel.appendChild(opt);
             });
+
+            const citySel = document.getElementById('cityFilter');
+            cities.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                citySel.appendChild(opt);
+            });
         }
 
         async function loadStatistics() {
             const stats = await request('/statistics');
             const container = document.getElementById('stats-container');
             const profStats = stats.professionStats || {};
+            const cityStats = stats.cityStats || {};
 
             let profHtml = '';
             for (const [key, val] of Object.entries(profStats)) {
                 profHtml += `<div class="profession-stat"><span class="name">${getProfessionLabel(key)}</span><span class="num">${val}人</span></div>`;
+            }
+
+            let cityHtml = '';
+            for (const [key, val] of Object.entries(cityStats)) {
+                cityHtml += `<div class="city-stat"><span class="name">${key}</span><span class="num">${val}人</span></div>`;
             }
 
             container.innerHTML = `
@@ -132,9 +174,15 @@
                         <div class="stat-value">${stats.notSubmitted}</div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-title"><span>各职业人数统计</span></div>
-                    <div class="profession-stats">${profHtml || '<span style="color:#999;">暂无数据</span>'}</div>
+                <div class="stats-sub-grid">
+                    <div class="card">
+                        <div class="card-title"><span>各职业人数统计</span></div>
+                        <div class="profession-stats">${profHtml || '<span style="color:#999;">暂无数据</span>'}</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>各城市人数统计</span></div>
+                        <div class="profession-stats">${cityHtml || '<span style="color:#999;">暂无数据</span>'}</div>
+                    </div>
                 </div>
             `;
         }
@@ -143,11 +191,13 @@
             const keyword = document.getElementById('keyword').value.trim();
             const verifyStatus = document.getElementById('verifyStatus').value;
             const professionType = document.getElementById('professionType').value;
+            const city = document.getElementById('cityFilter').value;
 
             const params = new URLSearchParams();
             if (keyword) params.append('keyword', keyword);
             if (verifyStatus) params.append('verifyStatus', verifyStatus);
             if (professionType) params.append('professionType', professionType);
+            if (city) params.append('city', city);
 
             const list = await request('/providers?' + params.toString());
             const tbody = document.getElementById('provider-list');
@@ -183,8 +233,8 @@
                         <td style="font-size:12px;color:#999;">${formatTime(p.updateTime)}</td>
                         <td>
                             <div class="actions">
+                                <button class="btn btn-sm btn-primary" onclick="openAuditDrawer('${p.id}')">审核</button>
                                 <button class="btn btn-sm" onclick="viewDetail('${p.id}')">详情</button>
-                                <button class="btn btn-sm" onclick="editProvider('${p.id}')">编辑</button>
                             </div>
                         </td>
                     </tr>
@@ -196,6 +246,7 @@
             document.getElementById('keyword').value = '';
             document.getElementById('verifyStatus').value = '';
             document.getElementById('professionType').value = '';
+            document.getElementById('cityFilter').value = '';
             loadProviders();
         }
 
@@ -207,8 +258,215 @@
             window.location.href = 'detail.html?id=' + id;
         }
 
-        function editProvider(id) {
-            window.location.href = 'form.html?id=' + id;
+        async function openAuditDrawer(id) {
+            const drawer = document.getElementById('audit-drawer');
+            drawer.style.display = 'flex';
+            document.getElementById('drawer-body').innerHTML = '<div class="empty">加载中...</div>';
+
+            try {
+                const [provider, records] = await Promise.all([
+                    request(`/providers/${id}`),
+                    request(`/providers/${id}/verify-records`)
+                ]);
+                currentProvider = provider;
+                currentRecords = records;
+                renderDrawer();
+            } catch (e) {
+                document.getElementById('drawer-body').innerHTML =
+                    `<div class="empty" style="color:#ff4d4f;">${e.message}</div>`;
+            }
+        }
+
+        function renderDrawer() {
+            const p = currentProvider;
+            const statusInfo = getStatusInfo(p.verifyStatus);
+            const completeness = p.completeness || 0;
+            const progClass = completeness >= 80 ? 'high' : completeness >= 50 ? 'mid' : 'low';
+            const skillTags = (p.skillTags || []).map(t => `<span class="skill-tag">${t}</span>`).join('');
+            const materials = (p.submittedMaterials || []).map(m =>
+                `<div class="material-item">${m}</div>`
+            ).join('');
+
+            const timelineHtml = currentRecords.length > 0
+                ? currentRecords.map(r => {
+                    const cls = r.action === 'APPROVED' ? 'approved' :
+                                r.action === 'REJECTED' ? 'rejected' :
+                                r.action === 'PENDING' ? 'pending' : '';
+                    const s = getStatusInfo(r.action);
+                    return `
+                        <div class="timeline-item ${cls}">
+                            <div class="timeline-time">${formatTime(r.createTime)}</div>
+                            <div class="timeline-content">
+                                <span class="status-tag ${s.class}">${s.label}</span>
+                                ${r.remark || ''}
+                            </div>
+                            <div class="timeline-operator">操作人：${r.operator || '系统'}</div>
+                        </div>
+                    `;
+                }).join('')
+                : '<div class="empty">暂无审核记录</div>';
+
+            let rejectReasonHtml = '';
+            if ((p.verifyStatus === 'REJECTED') && p.rejectReason) {
+                rejectReasonHtml = `<div class="reject-reason-box"><strong>驳回/退回原因：</strong>${p.rejectReason}</div>`;
+            }
+
+            document.getElementById('drawer-title').textContent =
+                `审核 - ${p.name}（${p.id}）`;
+
+            document.getElementById('drawer-body').innerHTML = `
+                <div class="drawer-section">
+                    <div class="drawer-section-title">
+                        <span>认证状态</span>
+                        <span class="status-tag ${statusInfo.class}" style="font-size:13px;">${statusInfo.label}</span>
+                    </div>
+                    ${rejectReasonHtml}
+                </div>
+
+                <div class="drawer-section">
+                    <div class="drawer-section-title">资料完整度</div>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="progress" style="flex:1;">
+                            <div class="progress-bar ${progClass}" style="width:${completeness}%;"></div>
+                        </div>
+                        <span style="font-weight:600;min-width:45px;">${completeness}%</span>
+                    </div>
+                </div>
+
+                <div class="drawer-grid">
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">基本信息</div>
+                        <ul class="info-list info-list-sm">
+                            <li><span class="label">服务商编号</span><span class="value">${p.id}</span></li>
+                            <li><span class="label">姓名</span><span class="value">${p.name}</span></li>
+                            <li><span class="label">手机号</span><span class="value">${maskPhone(p.phone)}</span></li>
+                            <li><span class="label">主职业</span><span class="value">${getProfessionLabel(p.professionType)}</span></li>
+                            <li><span class="label">服务城市</span><span class="value">${p.city}</span></li>
+                            <li><span class="label">技能标签</span><span class="value"><div class="skill-tags">${skillTags || '-'}</div></span></li>
+                        </ul>
+                    </div>
+
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">身份信息</div>
+                        <ul class="info-list info-list-sm">
+                            <li><span class="label">身份证姓名</span><span class="value">${p.idCardName || '-'}</span></li>
+                            <li><span class="label">身份证号</span><span class="value">${maskIdCard(p.idCardNo)}</span></li>
+                            <li><span class="label">身份证地址</span><span class="value">${p.idCardAddress || '-'}</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="drawer-section">
+                    <div class="drawer-section-title">提交材料</div>
+                    ${materials ? `<div class="material-list">${materials}</div>` : '<div class="empty" style="padding:20px 0;">尚未提交任何材料</div>'}
+                </div>
+
+                <div class="drawer-section">
+                    <div class="drawer-section-title">审核历史记录</div>
+                    <div class="timeline">${timelineHtml}</div>
+                </div>
+            `;
+
+            const footer = document.getElementById('drawer-footer');
+            const canApprove = p.verifyStatus === 'PENDING';
+            const canReject = p.verifyStatus === 'PENDING';
+            const canSendBack = p.verifyStatus === 'PENDING';
+
+            footer.innerHTML = `
+                <button class="btn btn-lg" onclick="closeDrawer()">关闭</button>
+                <button class="btn btn-warning btn-lg" onclick="openSendBack()" ${canSendBack ? '' : 'disabled'}>退回补充资料</button>
+                <button class="btn btn-danger btn-lg" onclick="openReject()" ${canReject ? '' : 'disabled'}>驳回</button>
+                <button class="btn btn-success btn-lg" onclick="openApprove()" ${canApprove ? '' : 'disabled'}>审核通过</button>
+            `;
+        }
+
+        function closeDrawer() {
+            document.getElementById('audit-drawer').style.display = 'none';
+            currentProvider = null;
+            currentRecords = [];
+        }
+
+        function openApprove() {
+            if (!currentProvider) return;
+            const html = `
+                <div class="form-group">
+                    <label class="form-label">审核备注</label>
+                    <textarea class="form-textarea" id="approve-remark" placeholder="选填，输入审核通过的备注信息"></textarea>
+                </div>
+                <div style="color:#52c41a;font-size:13px;">确认通过该服务商的实名认证申请？</div>
+            `;
+            showModal('审核通过', html, async (m) => {
+                const remark = m.querySelector('#approve-remark').value.trim();
+                try {
+                    await request(`/providers/${currentProvider.id}/verify/approve`, {
+                        method: 'POST',
+                        body: JSON.stringify({ operator: '平台审核员', remark: remark || '资料齐全，审核通过' })
+                    });
+                    showToast('审核通过', 'success');
+                    closeDrawer();
+                    await Promise.all([loadStatistics(), loadProviders()]);
+                    return true;
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    return false;
+                }
+            }, '确认通过');
+        }
+
+        function openReject() {
+            if (!currentProvider) return;
+            const html = `
+                <div class="form-group">
+                    <label class="form-label">驳回原因<span class="required">*</span></label>
+                    <textarea class="form-textarea" id="reject-reason" placeholder="请输入驳回原因，以便服务商修改后重新提交"></textarea>
+                </div>
+                <div style="color:#ff4d4f;font-size:13px;">驳回后服务商需修改资料并重新提交。</div>
+            `;
+            showModal('驳回审核', html, async (m) => {
+                const remark = m.querySelector('#reject-reason').value.trim();
+                if (!remark) { showToast('请输入驳回原因', 'error'); return false; }
+                try {
+                    await request(`/providers/${currentProvider.id}/verify/reject`, {
+                        method: 'POST',
+                        body: JSON.stringify({ operator: '平台审核员', remark })
+                    });
+                    showToast('已驳回', 'success');
+                    closeDrawer();
+                    await Promise.all([loadStatistics(), loadProviders()]);
+                    return true;
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    return false;
+                }
+            }, '确认驳回');
+        }
+
+        function openSendBack() {
+            if (!currentProvider) return;
+            const html = `
+                <div class="form-group">
+                    <label class="form-label">退回原因<span class="required">*</span></label>
+                    <textarea class="form-textarea" id="sendback-reason" placeholder="请输入退回补充资料的原因和具体要求"></textarea>
+                </div>
+                <div style="color:#fa8c16;font-size:13px;">退回后服务商可补充资料并重新提交，状态变为已驳回。</div>
+            `;
+            showModal('退回补充资料', html, async (m) => {
+                const remark = m.querySelector('#sendback-reason').value.trim();
+                if (!remark) { showToast('请输入退回原因', 'error'); return false; }
+                try {
+                    await request(`/providers/${currentProvider.id}/verify/send-back`, {
+                        method: 'POST',
+                        body: JSON.stringify({ operator: '平台审核员', remark })
+                    });
+                    showToast('已退回补充资料', 'success');
+                    closeDrawer();
+                    await Promise.all([loadStatistics(), loadProviders()]);
+                    return true;
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    return false;
+                }
+            }, '确认退回');
         }
 
         document.getElementById('keyword').addEventListener('keypress', (e) => {
