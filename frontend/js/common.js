@@ -2,15 +2,60 @@ const API_BASE = 'http://localhost:8080/api';
 
 async function request(url, options = {}) {
     const fullUrl = url.startsWith('http') ? url : API_BASE + url;
-    const resp = await fetch(fullUrl, {
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-        ...options
-    });
-    const data = await resp.json();
-    if (data.code !== 200) {
-        throw new Error(data.message || '请求失败');
+    try {
+        const resp = await fetch(fullUrl, {
+            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+            ...options
+        });
+        const data = await resp.json();
+        if (data.code !== 200) {
+            const err = new Error(data.message || '请求失败');
+            err.code = data.code;
+            err.data = data.data;
+            throw err;
+        }
+        return data.data;
+    } catch (e) {
+        if (e.code) throw e;
+        const err = new Error('网络请求失败：' + e.message);
+        err.code = 0;
+        throw err;
     }
-    return data.data;
+}
+
+function showFieldError(container, message) {
+    if (!container) return;
+    let errEl = container.querySelector('.field-error-tip');
+    if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.className = 'field-error-tip';
+        container.insertBefore(errEl, container.firstChild);
+    }
+    errEl.textContent = message;
+    errEl.style.display = 'block';
+    clearTimeout(errEl._hideTimer);
+    errEl._hideTimer = setTimeout(() => {
+        errEl.style.display = 'none';
+    }, 4000);
+}
+
+function showModalError(modal, message) {
+    if (!modal) return;
+    let errEl = modal.querySelector('.modal-error-tip');
+    if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.className = 'modal-error-tip';
+        const body = modal.querySelector('.modal-body');
+        if (body) {
+            body.insertBefore(errEl, body.firstChild);
+        }
+    }
+    errEl.textContent = message;
+    errEl.style.display = 'block';
+    clearTimeout(errEl._hideTimer);
+    errEl._hideTimer = setTimeout(() => {
+        errEl.style.display = 'none';
+    }, 4000);
 }
 
 const PROFESSION_MAP = {

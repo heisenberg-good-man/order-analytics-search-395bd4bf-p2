@@ -925,3 +925,47 @@ a:hover { color: #40a9ff; }
 
 .city-stat .name { color: #666; }
 .city-stat .num { font-weight: 600; color: #722ed1; }
+
+.field-error-tip {
+    padding: 10px 14px;
+    background: #fff1f0;
+    border: 1px solid #ffccc7;
+    border-radius: 6px;
+    color: #ff4d4f;
+    font-size: 13px;
+    margin-bottom: 12px;
+    display: none;
+}
+
+.modal-error-tip {
+    padding: 10px 14px;
+    background: #fff1f0;
+    border: 1px solid #ffccc7;
+    border-radius: 6px;
+    color: #ff4d4f;
+    font-size: 13px;
+    margin-bottom: 12px;
+    display: none;
+}
+
+.drawer-error-tip {
+    padding: 10px 14px;
+    background: #fff1f0;
+    border: 1px solid #ffccc7;
+    border-radius: 6px;
+    color: #ff4d4f;
+    font-size: 13px;
+    margin-bottom: 12px;
+    display: none;
+}
+
+.action-error-tip {
+    padding: 8px 12px;
+    background: #fff1f0;
+    border: 1px solid #ffccc7;
+    border-radius: 4px;
+    color: #ff4d4f;
+    font-size: 12px;
+    margin-top: 8px;
+    display: none;
+}

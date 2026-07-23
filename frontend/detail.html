@@ -225,10 +225,10 @@
                 const idCardAddress = m.querySelector('#submit-address').value.trim();
                 const materials = Array.from(m.querySelectorAll('.mat-check:checked')).map(c => c.value);
 
-                if (!idCardName) { showToast('请输入身份证姓名', 'error'); return false; }
-                if (!idCardNo || idCardNo.length < 15) { showToast('请输入有效的身份证号', 'error'); return false; }
-                if (!idCardAddress) { showToast('请输入身份证地址', 'error'); return false; }
-                if (materials.length === 0) { showToast('请至少选择一项提交材料', 'error'); return false; }
+                if (!idCardName) { showModalError(m, '请输入身份证姓名'); return false; }
+                if (!idCardNo || idCardNo.length < 15) { showModalError(m, '请输入有效的身份证号'); return false; }
+                if (!idCardAddress) { showModalError(m, '请输入身份证地址'); return false; }
+                if (materials.length === 0) { showModalError(m, '请至少选择一项提交材料'); return false; }
 
                 try {
                     await request(`/providers/${providerId}/verify/submit`, {
@@ -239,7 +239,7 @@
                     loadDetail();
                     return true;
                 } catch (e) {
-                    showToast(e.message, 'error');
+                    showModalError(m, e.message);
                     return false;
                 }
             }, '提交认证');
@@ -264,7 +264,7 @@
                     loadDetail();
                     return true;
                 } catch (e) {
-                    showToast(e.message, 'error');
+                    showModalError(m, e.message);
                     return false;
                 }
             }, '确认通过');
@@ -280,7 +280,7 @@
             `;
             showModal('驳回审核', html, async (m) => {
                 const remark = m.querySelector('#reject-reason').value.trim();
-                if (!remark) { showToast('请输入驳回原因', 'error'); return false; }
+                if (!remark) { showModalError(m, '请输入驳回原因'); return false; }
                 try {
                     await request(`/providers/${providerId}/verify/reject`, {
                         method: 'POST',
@@ -290,7 +290,7 @@
                     loadDetail();
                     return true;
                 } catch (e) {
-                    showToast(e.message, 'error');
+                    showModalError(m, e.message);
                     return false;
                 }
             }, '确认驳回');
@@ -306,7 +306,7 @@
             `;
             showModal('退回补充资料', html, async (m) => {
                 const remark = m.querySelector('#sendback-reason').value.trim();
-                if (!remark) { showToast('请输入退回原因', 'error'); return false; }
+                if (!remark) { showModalError(m, '请输入退回原因'); return false; }
                 try {
                     await request(`/providers/${providerId}/verify/send-back`, {
                         method: 'POST',
@@ -316,7 +316,7 @@
                     loadDetail();
                     return true;
                 } catch (e) {
-                    showToast(e.message, 'error');
+                    showModalError(m, e.message);
                     return false;
                 }
             }, '确认退回');

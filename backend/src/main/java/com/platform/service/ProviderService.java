@@ -1,5 +1,6 @@
 package com.platform.service;
 
+import com.platform.common.BusinessException;
 import com.platform.dto.ProviderCreateDTO;
 import com.platform.dto.ProviderUpdateDTO;
 import com.platform.dto.VerifyAuditDTO;
@@ -136,6 +137,60 @@ public class ProviderService {
                 verifyRecords.add(r1);
             }
         }
+
+        ServiceProvider p9 = new ServiceProvider();
+        p9.setId("SP0009");
+        p9.setName("郑阿姨");
+        p9.setPhone("13800000009");
+        p9.setProfessionType("CLEANER");
+        p9.setCity("天津");
+        p9.setSkillTags(Arrays.asList("日常保洁", "深度保洁"));
+        p9.setVerifyStatus(VerifyStatus.NOT_SUBMITTED);
+        p9.setIdCardName("郑阿姨");
+        p9.setIdCardNo("120101199001010009");
+        p9.setIdCardAddress("天津市和平区南京路9号");
+        p9.setSubmittedMaterials(Arrays.asList("身份证正面"));
+        p9.setRejectReason(null);
+        p9.setCreateTime(LocalDateTime.now().minusDays(9));
+        p9.setUpdateTime(LocalDateTime.now().minusDays(8));
+        p9.setCompleteness(calcCompleteness(p9));
+        providerMap.put("SP0009", p9);
+
+        ServiceProvider p10 = new ServiceProvider();
+        p10.setId("SP0010");
+        p10.setName("冯师傅");
+        p10.setPhone("13800000010");
+        p10.setProfessionType("REPAIRMAN");
+        p10.setCity("重庆");
+        p10.setSkillTags(Arrays.asList("水电维修", "家电维修"));
+        p10.setVerifyStatus(VerifyStatus.REJECTED);
+        p10.setIdCardName("冯师傅");
+        p10.setIdCardNo("500101198501010010");
+        p10.setIdCardAddress("重庆市渝中区解放碑10号");
+        p10.setSubmittedMaterials(Arrays.asList("身份证正面", "身份证反面"));
+        p10.setRejectReason("[退回补充] 请补充职业资格证书和健康证明，材料不齐全无法通过审核");
+        p10.setCreateTime(LocalDateTime.now().minusDays(10));
+        p10.setUpdateTime(LocalDateTime.now().minusDays(1).plusHours(3));
+        p10.setCompleteness(calcCompleteness(p10));
+        providerMap.put("SP0010", p10);
+
+        VerifyRecord vr10_1 = new VerifyRecord();
+        vr10_1.setId("VR1010_1");
+        vr10_1.setProviderId("SP0010");
+        vr10_1.setAction(VerifyStatus.PENDING);
+        vr10_1.setOperator("冯师傅");
+        vr10_1.setRemark("提交实名认证资料");
+        vr10_1.setCreateTime(LocalDateTime.now().minusDays(2));
+        verifyRecords.add(vr10_1);
+
+        VerifyRecord vr10_2 = new VerifyRecord();
+        vr10_2.setId("VR1010_2");
+        vr10_2.setProviderId("SP0010");
+        vr10_2.setAction(VerifyStatus.REJECTED);
+        vr10_2.setOperator("平台审核员-小张");
+        vr10_2.setRemark("[退回补充] 请补充职业资格证书和健康证明，材料不齐全无法通过审核");
+        vr10_2.setCreateTime(LocalDateTime.now().minusDays(1).plusHours(3));
+        verifyRecords.add(vr10_2);
     }
 
     public List<String> checkMissingFields(ServiceProvider p) {
@@ -211,6 +266,10 @@ public class ProviderService {
         return providerMap.get(id);
     }
 
+    public ServiceProvider getByIdOrThrow(String id) {
+        return getProviderOrThrow(id);
+    }
+
     public ServiceProvider create(ProviderCreateDTO dto) {
         String id = "SP" + String.format("%04d", idGenerator.getAndIncrement());
         ServiceProvider p = new ServiceProvider();
@@ -229,15 +288,14 @@ public class ProviderService {
     }
 
     public ServiceProvider update(String id, ProviderUpdateDTO dto) {
-        ServiceProvider p = providerMap.get(id);
-        if (p == null) return null;
+        ServiceProvider p = getProviderOrThrow(id);
 
         if (p.getVerifyStatus() == VerifyStatus.PENDING) {
-            throw new IllegalStateException("待审核状态下不能修改资料，请等待审核结果或联系平台");
+            throw new BusinessException("待审核状态下不能修改资料，请等待审核结果或联系平台");
         }
         if (p.getVerifyStatus() == VerifyStatus.APPROVED) {
             if (dto.getProfessionType() != null || dto.getCity() != null) {
-                throw new IllegalStateException("已认证通过，职业和城市不能随意修改，如需变更请联系平台");
+                throw new BusinessException("已认证通过，职业和城市不能随意修改，如需变更请联系平台");
             }
         }
 
@@ -255,34 +313,58 @@ public class ProviderService {
         return providerMap.remove(id) != null;
     }
 
-    public ServiceProvider submitVerify(String id, VerifySubmitDTO dto) {
+    private ServiceProvider getProviderOrThrow(String id) {
         ServiceProvider p = providerMap.get(id);
-        if (p == null) return null;
+        if (p == null) {
+            throw new BusinessException(404, "服务商不存在");
+        }
+        return p;
+    }
+
+    private void assertPendingStatus(ServiceProvider p, String action) {
+        if (p.getVerifyStatus() != VerifyStatus.PENDING) {
+            throw new BusinessException("只有待审核状态才能" + action);
+        }
+    }
+
+    private void addVerifyRecord(String providerId, VerifyStatus action, String operator, String remark) {
+        VerifyRecord r = new VerifyRecord();
+        r.setId("VR" + System.currentTimeMillis() + "_" + (int)(Math.random() * 1000));
+        r.setProviderId(providerId);
+        r.setAction(action);
+        r.setOperator(operator != null && !operator.isEmpty() ? operator : "系统");
+        r.setRemark(remark);
+        r.setCreateTime(LocalDateTime.now());
+        verifyRecords.add(r);
+    }
+
+    public ServiceProvider submitVerify(String id, VerifySubmitDTO dto) {
+        ServiceProvider p = getProviderOrThrow(id);
 
         if (p.getVerifyStatus() == VerifyStatus.PENDING) {
-            throw new IllegalStateException("当前处于待审核状态，不能重复提交");
+            throw new BusinessException("当前处于待审核状态，不能重复提交");
         }
         if (p.getVerifyStatus() == VerifyStatus.APPROVED) {
-            throw new IllegalStateException("已认证通过，无需重复提交");
+            throw new BusinessException("已认证通过，无需重复提交");
         }
 
         if (dto.getIdCardName() == null || dto.getIdCardName().trim().isEmpty()) {
-            throw new IllegalArgumentException("身份证姓名不能为空");
+            throw new BusinessException("身份证姓名不能为空");
         }
         if (dto.getIdCardNo() == null || dto.getIdCardNo().trim().isEmpty()) {
-            throw new IllegalArgumentException("身份证号不能为空");
+            throw new BusinessException("身份证号不能为空");
         }
         if (dto.getIdCardAddress() == null || dto.getIdCardAddress().trim().isEmpty()) {
-            throw new IllegalArgumentException("身份证地址不能为空");
+            throw new BusinessException("身份证地址不能为空");
         }
         if (dto.getSubmittedMaterials() == null || dto.getSubmittedMaterials().isEmpty()) {
-            throw new IllegalArgumentException("请至少提交一项认证材料");
+            throw new BusinessException("请至少提交一项认证材料");
         }
         if (p.getProfessionType() == null || p.getProfessionType().trim().isEmpty()) {
-            throw new IllegalArgumentException("请先完善期望职业信息");
+            throw new BusinessException("请先完善期望职业信息");
         }
         if (p.getCity() == null || p.getCity().trim().isEmpty()) {
-            throw new IllegalArgumentException("请先完善服务城市信息");
+            throw new BusinessException("请先完善服务城市信息");
         }
 
         p.setIdCardName(dto.getIdCardName());
@@ -294,86 +376,65 @@ public class ProviderService {
         p.setUpdateTime(LocalDateTime.now());
         p.setCompleteness(calcCompleteness(p));
 
-        VerifyRecord r = new VerifyRecord();
-        r.setId("VR" + System.currentTimeMillis());
-        r.setProviderId(id);
-        r.setAction(VerifyStatus.PENDING);
-        r.setOperator(p.getName());
-        r.setRemark("提交实名认证资料");
-        r.setCreateTime(LocalDateTime.now());
-        verifyRecords.add(r);
+        addVerifyRecord(id, VerifyStatus.PENDING, p.getName(), "提交实名认证资料");
 
         return p;
     }
 
     public ServiceProvider approve(String id, VerifyAuditDTO dto) {
-        ServiceProvider p = providerMap.get(id);
-        if (p == null) return null;
-        if (p.getVerifyStatus() != VerifyStatus.PENDING) {
-            throw new IllegalStateException("只有待审核状态才能通过审核");
-        }
+        ServiceProvider p = getProviderOrThrow(id);
+        assertPendingStatus(p, "通过审核");
+
         p.setVerifyStatus(VerifyStatus.APPROVED);
         p.setRejectReason(null);
         p.setUpdateTime(LocalDateTime.now());
+        p.setCompleteness(calcCompleteness(p));
 
-        VerifyRecord r = new VerifyRecord();
-        r.setId("VR" + System.currentTimeMillis());
-        r.setProviderId(id);
-        r.setAction(VerifyStatus.APPROVED);
-        r.setOperator(dto.getOperator() != null ? dto.getOperator() : "平台审核员");
-        r.setRemark(dto.getRemark() != null && !dto.getRemark().isEmpty() ? dto.getRemark() : "资料齐全，审核通过");
-        r.setCreateTime(LocalDateTime.now());
-        verifyRecords.add(r);
+        String remark = (dto != null && dto.getRemark() != null && !dto.getRemark().isEmpty())
+            ? dto.getRemark() : "资料齐全，审核通过";
+        String operator = (dto != null && dto.getOperator() != null && !dto.getOperator().isEmpty())
+            ? dto.getOperator() : "平台审核员";
+        addVerifyRecord(id, VerifyStatus.APPROVED, operator, remark);
 
         return p;
     }
 
     public ServiceProvider reject(String id, VerifyAuditDTO dto) {
-        ServiceProvider p = providerMap.get(id);
-        if (p == null) return null;
-        if (p.getVerifyStatus() != VerifyStatus.PENDING) {
-            throw new IllegalStateException("只有待审核状态才能驳回");
+        ServiceProvider p = getProviderOrThrow(id);
+        assertPendingStatus(p, "驳回");
+
+        if (dto == null || dto.getRemark() == null || dto.getRemark().trim().isEmpty()) {
+            throw new BusinessException("驳回原因不能为空");
         }
-        if (dto.getRemark() == null || dto.getRemark().trim().isEmpty()) {
-            throw new IllegalArgumentException("驳回原因不能为空");
-        }
+
         p.setVerifyStatus(VerifyStatus.REJECTED);
         p.setRejectReason(dto.getRemark());
         p.setUpdateTime(LocalDateTime.now());
+        p.setCompleteness(calcCompleteness(p));
 
-        VerifyRecord r = new VerifyRecord();
-        r.setId("VR" + System.currentTimeMillis());
-        r.setProviderId(id);
-        r.setAction(VerifyStatus.REJECTED);
-        r.setOperator(dto.getOperator() != null ? dto.getOperator() : "平台审核员");
-        r.setRemark(dto.getRemark());
-        r.setCreateTime(LocalDateTime.now());
-        verifyRecords.add(r);
+        String operator = (dto.getOperator() != null && !dto.getOperator().isEmpty())
+            ? dto.getOperator() : "平台审核员";
+        addVerifyRecord(id, VerifyStatus.REJECTED, operator, dto.getRemark());
 
         return p;
     }
 
     public ServiceProvider sendBack(String id, VerifyAuditDTO dto) {
-        ServiceProvider p = providerMap.get(id);
-        if (p == null) return null;
-        if (p.getVerifyStatus() != VerifyStatus.PENDING) {
-            throw new IllegalStateException("只有待审核状态才能退回补充资料");
+        ServiceProvider p = getProviderOrThrow(id);
+        assertPendingStatus(p, "退回补充资料");
+
+        if (dto == null || dto.getRemark() == null || dto.getRemark().trim().isEmpty()) {
+            throw new BusinessException("退回原因不能为空");
         }
-        if (dto.getRemark() == null || dto.getRemark().trim().isEmpty()) {
-            throw new IllegalArgumentException("退回原因不能为空");
-        }
+
         p.setVerifyStatus(VerifyStatus.REJECTED);
         p.setRejectReason(dto.getRemark());
         p.setUpdateTime(LocalDateTime.now());
+        p.setCompleteness(calcCompleteness(p));
 
-        VerifyRecord r = new VerifyRecord();
-        r.setId("VR" + System.currentTimeMillis());
-        r.setProviderId(id);
-        r.setAction(VerifyStatus.REJECTED);
-        r.setOperator(dto.getOperator() != null ? dto.getOperator() : "平台审核员");
-        r.setRemark("[退回补充] " + dto.getRemark());
-        r.setCreateTime(LocalDateTime.now());
-        verifyRecords.add(r);
+        String operator = (dto.getOperator() != null && !dto.getOperator().isEmpty())
+            ? dto.getOperator() : "平台审核员";
+        addVerifyRecord(id, VerifyStatus.REJECTED, operator, "[退回补充] " + dto.getRemark());
 
         return p;
     }

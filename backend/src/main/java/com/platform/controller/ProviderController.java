@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/providers")
@@ -32,11 +31,7 @@ public class ProviderController {
 
     @GetMapping("/{id}")
     public Result<ServiceProvider> getById(@PathVariable String id) {
-        ServiceProvider p = providerService.getById(id);
-        if (p == null) {
-            return Result.error(404, "服务商不存在");
-        }
-        return Result.success(p);
+        return Result.success(providerService.getByIdOrThrow(id));
     }
 
     @PostMapping
@@ -58,15 +53,7 @@ public class ProviderController {
 
     @PutMapping("/{id}")
     public Result<ServiceProvider> update(@PathVariable String id, @RequestBody ProviderUpdateDTO dto) {
-        try {
-            ServiceProvider p = providerService.update(id, dto);
-            if (p == null) {
-                return Result.error(404, "服务商不存在");
-            }
-            return Result.success(p);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return Result.error(e.getMessage());
-        }
+        return Result.success(providerService.update(id, dto));
     }
 
     @DeleteMapping("/{id}")
@@ -80,78 +67,33 @@ public class ProviderController {
 
     @PostMapping("/{id}/verify/submit")
     public Result<ServiceProvider> submitVerify(@PathVariable String id, @RequestBody VerifySubmitDTO dto) {
-        try {
-            ServiceProvider p = providerService.submitVerify(id, dto);
-            if (p == null) {
-                return Result.error(404, "服务商不存在");
-            }
-            return Result.success(p);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return Result.error(e.getMessage());
-        }
+        return Result.success(providerService.submitVerify(id, dto));
     }
 
     @PostMapping("/{id}/verify/approve")
     public Result<ServiceProvider> approve(@PathVariable String id, @RequestBody(required = false) VerifyAuditDTO dto) {
-        try {
-            if (dto == null) dto = new VerifyAuditDTO();
-            ServiceProvider p = providerService.approve(id, dto);
-            if (p == null) {
-                return Result.error(404, "服务商不存在");
-            }
-            return Result.success(p);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return Result.error(e.getMessage());
-        }
+        return Result.success(providerService.approve(id, dto));
     }
 
     @PostMapping("/{id}/verify/reject")
     public Result<ServiceProvider> reject(@PathVariable String id, @RequestBody VerifyAuditDTO dto) {
-        try {
-            if (dto == null || dto.getRemark() == null || dto.getRemark().trim().isEmpty()) {
-                return Result.error("驳回原因不能为空");
-            }
-            ServiceProvider p = providerService.reject(id, dto);
-            if (p == null) {
-                return Result.error(404, "服务商不存在");
-            }
-            return Result.success(p);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return Result.error(e.getMessage());
-        }
+        return Result.success(providerService.reject(id, dto));
     }
 
     @PostMapping("/{id}/verify/send-back")
     public Result<ServiceProvider> sendBack(@PathVariable String id, @RequestBody VerifyAuditDTO dto) {
-        try {
-            if (dto == null || dto.getRemark() == null || dto.getRemark().trim().isEmpty()) {
-                return Result.error("退回原因不能为空");
-            }
-            ServiceProvider p = providerService.sendBack(id, dto);
-            if (p == null) {
-                return Result.error(404, "服务商不存在");
-            }
-            return Result.success(p);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return Result.error(e.getMessage());
-        }
+        return Result.success(providerService.sendBack(id, dto));
     }
 
     @GetMapping("/{id}/verify-records")
     public Result<List<VerifyRecord>> getVerifyRecords(@PathVariable String id) {
-        ServiceProvider p = providerService.getById(id);
-        if (p == null) {
-            return Result.error(404, "服务商不存在");
-        }
+        providerService.getByIdOrThrow(id);
         return Result.success(providerService.getVerifyRecords(id));
     }
 
     @GetMapping("/{id}/missing-fields")
     public Result<List<String>> getMissingFields(@PathVariable String id) {
-        ServiceProvider p = providerService.getById(id);
-        if (p == null) {
-            return Result.error(404, "服务商不存在");
-        }
+        ServiceProvider p = providerService.getByIdOrThrow(id);
         return Result.success(providerService.checkMissingFields(p));
     }
 }

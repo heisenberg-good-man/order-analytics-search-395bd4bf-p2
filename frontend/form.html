@@ -205,6 +205,7 @@
             </div>
 
             <div class="action-footer">
+                <div id="action-error" class="action-error-tip" style="display:none;flex-basis:100%;text-align:center;"></div>
                 <button class="btn btn-lg" onclick="goBack()">返回</button>
                 <button class="btn btn-lg" onclick="saveDraft()">保存草稿</button>
                 <button class="btn btn-primary btn-lg" id="submit-btn" onclick="submitVerify()">提交认证</button>
@@ -477,6 +478,16 @@
             } catch (e) { /* ignore */ }
         }
 
+        function showActionError(msg) {
+            const errEl = document.getElementById('action-error');
+            errEl.textContent = msg;
+            errEl.style.display = 'block';
+            clearTimeout(errEl._hideTimer);
+            errEl._hideTimer = setTimeout(() => {
+                errEl.style.display = 'none';
+            }, 4000);
+        }
+
         async function saveDraft() {
             const name = document.getElementById('edit-name').value.trim();
             const phone = document.getElementById('edit-phone').value.trim();
@@ -493,7 +504,7 @@
                 showToast('草稿已保存', 'success');
                 await loadProviderData();
             } catch (e) {
-                showToast(e.message, 'error');
+                showActionError(e.message);
             }
         }
 
@@ -537,7 +548,7 @@
                 showToast('已提交认证，等待平台审核', 'success');
                 await loadProviderData();
             } catch (e) {
-                showToast(e.message, 'error');
+                showActionError(e.message);
             }
         }
 

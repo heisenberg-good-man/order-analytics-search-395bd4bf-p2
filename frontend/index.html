@@ -407,7 +407,7 @@
                     await Promise.all([loadStatistics(), loadProviders()]);
                     return true;
                 } catch (e) {
-                    showToast(e.message, 'error');
+                    showModalError(m, e.message);
                     return false;
                 }
             }, '确认通过');
@@ -424,7 +424,7 @@
             `;
             showModal('驳回审核', html, async (m) => {
                 const remark = m.querySelector('#reject-reason').value.trim();
-                if (!remark) { showToast('请输入驳回原因', 'error'); return false; }
+                if (!remark) { showModalError(m, '请输入驳回原因'); return false; }
                 try {
                     await request(`/providers/${currentProvider.id}/verify/reject`, {
                         method: 'POST',
@@ -435,7 +435,7 @@
                     await Promise.all([loadStatistics(), loadProviders()]);
                     return true;
                 } catch (e) {
-                    showToast(e.message, 'error');
+                    showModalError(m, e.message);
                     return false;
                 }
             }, '确认驳回');
@@ -452,7 +452,7 @@
             `;
             showModal('退回补充资料', html, async (m) => {
                 const remark = m.querySelector('#sendback-reason').value.trim();
-                if (!remark) { showToast('请输入退回原因', 'error'); return false; }
+                if (!remark) { showModalError(m, '请输入退回原因'); return false; }
                 try {
                     await request(`/providers/${currentProvider.id}/verify/send-back`, {
                         method: 'POST',
@@ -463,7 +463,7 @@
                     await Promise.all([loadStatistics(), loadProviders()]);
                     return true;
                 } catch (e) {
-                    showToast(e.message, 'error');
+                    showModalError(m, e.message);
                     return false;
                 }
             }, '确认退回');
