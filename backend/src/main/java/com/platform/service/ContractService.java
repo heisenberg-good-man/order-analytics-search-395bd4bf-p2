@@ -155,6 +155,14 @@ public class ContractService {
             throw new BusinessException("服务商所在城市与需求不匹配");
         }
 
+        List<String> reqSkills = req.getRequiredSkills() != null ? req.getRequiredSkills() : Collections.emptyList();
+        List<String> providerSkills = provider.getSkillTags() != null ? provider.getSkillTags() : Collections.emptyList();
+        if (!reqSkills.isEmpty() && !providerSkills.containsAll(reqSkills)) {
+            List<String> missing = new ArrayList<>(reqSkills);
+            missing.removeAll(providerSkills);
+            throw new BusinessException("服务商缺少所需技能：" + String.join("、", missing));
+        }
+
         long existingDraftCount = contractMap.values().stream()
             .filter(c -> c.getRequirementId().equals(req.getId()) && "DRAFT".equals(c.getStatus()))
             .count();

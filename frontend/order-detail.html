@@ -88,6 +88,16 @@
                 </div>
             </div>
 
+            <div class="card" id="progress-section" style="display:none;">
+                <div class="card-title">
+                    <span>服务进度</span>
+                    <span class="section-hint">追踪服务执行进度</span>
+                </div>
+                <div id="progress-info-area">
+                    <div class="empty">加载中...</div>
+                </div>
+            </div>
+
             <div class="card recommend-section">
                 <div class="recommend-header">
                     <div style="font-size:16px;font-weight:600;">推荐服务商</div>
@@ -683,6 +693,131 @@
             window.location.href = 'contract-detail.html?id=' + id;
         }
 
+        const PROGRESS_STATUS_MAP = {
+            PENDING_VISIT: { label: '待上门', class: 'status-tag status-yellow' },
+            IN_SERVICE: { label: '服务中', class: 'status-tag status-blue' },
+            PENDING_ACCEPTANCE: { label: '待验收', class: 'status-tag status-orange' },
+            COMPLETED: { label: '已完成', class: 'status-tag status-green' },
+            ABNORMAL_PAUSED: { label: '异常暂停', class: 'status-tag status-red' }
+        };
+
+        function getProgressStatusInfo(status) {
+            return PROGRESS_STATUS_MAP[status] || { label: status, class: 'status-tag status-gray' };
+        }
+
+        let currentProgress = null;
+
+        async function loadProgress() {
+            if (!currentReq) return;
+            const section = document.getElementById('progress-section');
+            const infoArea = document.getElementById('progress-info-area');
+
+            if (currentReq.status !== 'SIGNED') {
+                section.style.display = 'none';
+                return;
+            }
+
+            try {
+                const progress = await request('/progress/by-requirement/' + currentReq.id);
+                currentProgress = progress;
+                renderProgress(progress);
+            } catch (e) {
+                currentProgress = null;
+                renderProgress(null);
+            }
+        }
+
+        function renderProgress(progress) {
+            const section = document.getElementById('progress-section');
+            const infoArea = document.getElementById('progress-info-area');
+
+            if (currentReq.status !== 'SIGNED') {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+
+            if (!progress) {
+                const hasSignedContract = currentContracts.some(c => c.status === 'SIGNED');
+                const signedContract = currentContracts.find(c => c.status === 'SIGNED');
+
+                if (hasSignedContract) {
+                    infoArea.innerHTML = `
+                        <div style="padding: 16px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px; text-align: center;">
+                            <div style="color: #389e0d; margin-bottom: 8px; font-weight: 500;">合同已签约，可以开启服务进度</div>
+                            <div style="font-size: 13px; color: #666; margin-bottom: 12px;">
+                                开启后可追踪服务节点推进情况
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="startServiceProgress('${signedContract.id}')">
+                                ▶ 开启服务进度
+                            </button>
+                        </div>
+                        <div id="progress-error" class="action-error-tip" style="display:none; margin-top: 10px;"></div>
+                    `;
+                } else {
+                    infoArea.innerHTML = '<div class="empty">暂无服务进度</div>';
+                }
+                return;
+            }
+
+            const st = getProgressStatusInfo(progress.currentStatus);
+            const nodes = (progress.nodes || []).filter(n => n.sortOrder < 99).sort((a, b) => a.sortOrder - b.sortOrder);
+
+            const miniHtml = nodes.map((n, i) => {
+                const isDone = n.actualTime != null;
+                const isCurrent = n.status === progress.currentStatus && progress.currentStatus !== 'ABNORMAL_PAUSED';
+                let cls = 'dot-pending';
+                if (progress.currentStatus === 'ABNORMAL_PAUSED') {
+                    cls = isDone ? 'dot-done' : 'dot-pending';
+                } else if (isCurrent) cls = 'dot-current';
+                else if (isDone) cls = 'dot-done';
+                return `
+                    <div class="mini-timeline-item">
+                        <div class="mini-dot ${cls}"></div>
+                        <span class="mini-label">${n.nodeName}</span>
+                    </div>
+                `;
+            }).join('');
+
+            infoArea.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div>
+                        <span style="font-weight: 500; margin-right: 10px;">${progress.currentNode || '-'}</span>
+                        <span class="${st.class}" style="font-size:12px; padding:2px 8px;">${st.label}</span>
+                    </div>
+                    <button class="btn btn-sm btn-link" onclick="goToProgressDetail('${progress.id}')">查看详情 →</button>
+                </div>
+                <div class="progress-mini-timeline" style="padding: 10px 20px; background: #fafafa; border-radius: 6px;">
+                    ${miniHtml}
+                </div>
+            `;
+        }
+
+        async function startServiceProgress(contractId) {
+            const errorEl = document.getElementById('progress-error');
+            if (errorEl) errorEl.style.display = 'none';
+
+            try {
+                await request('/progress/create/' + contractId, {
+                    method: 'POST'
+                });
+                showToast('服务进度已开启', 'success');
+                await loadProgress();
+            } catch (e) {
+                if (errorEl) {
+                    errorEl.textContent = e.message;
+                    errorEl.style.display = 'block';
+                } else {
+                    showToast(e.message, 'error');
+                }
+            }
+        }
+
+        function goToProgressDetail(id) {
+            window.location.href = 'progress-detail.html?id=' + id;
+        }
+
         async function loadRequirementDetail() {
             const id = getReqId();
             if (!id) return;
@@ -710,6 +845,7 @@
             if (currentReq) {
                 await loadContracts();
                 updateContractButtonState();
+                await loadProgress();
             }
         };
 

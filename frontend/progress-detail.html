@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务进度详情 - 家政服务中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏠 家政服务中介平台</h1>
+            <nav class="nav">
+                <a href="index.html">认证审核</a>
+                <a href="providers.html">服务商管理</a>
+                <a href="orders.html">需求管理</a>
+                <a href="contracts.html">合同管理</a>
+                <a href="progress.html" class="active">服务进度</a>
+            </nav>
+        </header>
+
+        <div class="page-header">
+            <h2>服务进度详情</h2>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <a href="progress.html" class="btn btn-default btn-sm">← 返回列表</a>
+                <span id="progress-status-tag" class="status-tag"></span>
+            </div>
+        </div>
+
+        <div class="detail-layout">
+            <div class="detail-main">
+                <div class="detail-card">
+                    <div class="card-title">服务信息</div>
+                    <div id="service-info">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="detail-card">
+                    <div class="card-title">
+                        服务节点时间线
+                        <span id="current-node-label" style="margin-left: 10px; font-size: 13px; color: #666; font-weight: normal;"></span>
+                    </div>
+                    <div id="timeline" class="timeline">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-sidebar">
+                <div class="provider-summary">
+                    <div class="provider-summary-title">服务商信息</div>
+                    <div id="provider-summary-content">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="action-card">
+                    <div class="card-title">操作区</div>
+                    <div id="action-area">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="action-error-tip" id="action-error" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/common.js"></script>
+    <script>
+        const PROGRESS_STATUS_MAP = {
+            PENDING_VISIT: { label: '待上门', class: 'status-yellow' },
+            IN_SERVICE: { label: '服务中', class: 'status-blue' },
+            PENDING_ACCEPTANCE: { label: '待验收', class: 'status-orange' },
+            COMPLETED: { label: '已完成', class: 'status-green' },
+            ABNORMAL_PAUSED: { label: '异常暂停', class: 'status-red' }
+        };
+
+        function getProgressStatusInfo(status) {
+            return PROGRESS_STATUS_MAP[status] || { label: status, class: 'status-gray' };
+        }
+
+        let currentProgress = null;
+        let progressId = null;
+
+        function getQueryParam(name) {
+            const params = new URLSearchParams(window.location.search);
+            return params.get(name);
+        }
+
+        async function loadProgress() {
+            try {
+                currentProgress = await request('/progress/' + progressId);
+                renderProgress();
+                renderTimeline();
+                renderProviderSummary();
+                renderActions();
+            } catch (e) {
+                document.getElementById('service-info').innerHTML =
+                    '<div class="empty">加载失败：' + e.message + '</div>';
+            }
+        }
+
+        function renderProgress() {
+            const p = currentProgress;
+            const st = getProgressStatusInfo(p.currentStatus);
+
+            const statusTag = document.getElementById('progress-status-tag');
+            statusTag.className = 'status-tag ' + st.class;
+            statusTag.textContent = st.label;
+
+            document.getElementById('current-node-label').textContent =
+                '当前：' + (p.currentNode || '-');
+
+            const html = `
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">需求标题：</span>
+                        <span class="value">
+                            <a href="order-detail.html?id=${p.requirementId}" style="color:#1890ff;">${p.requirementTitle}</a>
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">合同编号：</span>
+                        <span class="value">
+                            <a href="contract-detail.html?id=${p.contractId}" style="color:#1890ff;">${p.contractId}</a>
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">职业类型：</span>
+                        <span class="value">${getProfessionLabel(p.professionType)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">服务城市：</span>
+                        <span class="value">${p.city}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">服务预算：</span>
+                        <span class="value">¥${p.budget}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">创建时间：</span>
+                        <span class="value">${formatTime(p.createTime)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">更新时间：</span>
+                        <span class="value">${formatTime(p.updateTime)}</span>
+                    </div>
+                </div>
+            `;
+            document.getElementById('service-info').innerHTML = html;
+        }
+
+        function renderTimeline() {
+            const p = currentProgress;
+            const nodes = (p.nodes || []).sort((a, b) => a.sortOrder - b.sortOrder);
+
+            if (nodes.length === 0) {
+                document.getElementById('timeline').innerHTML = '<div class="empty">暂无节点记录</div>';
+                return;
+            }
+
+            const html = nodes.map((n, i) => {
+                const st = getProgressStatusInfo(n.status);
+                const isCurrent = n.status === p.currentStatus && p.currentStatus !== 'ABNORMAL_PAUSED';
+                const isDone = n.actualTime != null;
+                const isPaused = n.status === 'ABNORMAL_PAUSED';
+
+                let dotClass = 'timeline-dot-pending';
+                if (isPaused) dotClass = 'timeline-dot-error';
+                else if (isCurrent) dotClass = 'timeline-dot-current';
+                else if (isDone) dotClass = 'timeline-dot-done';
+
+                return `
+                    <div class="timeline-item ${isCurrent ? 'timeline-item-current' : ''}">
+                        <div class="timeline-dot ${dotClass}"></div>
+                        <div class="timeline-content">
+                            <div class="timeline-header">
+                                <span class="timeline-title">${n.nodeName}</span>
+                                <span class="status-tag ${st.class}" style="font-size:11px; padding:1px 6px;">
+                                    ${st.label}
+                                </span>
+                            </div>
+                            <div class="timeline-desc">${n.description || '-'}</div>
+                            <div class="timeline-meta">
+                                ${n.estimatedTime ? `<span>预计：${formatTime(n.estimatedTime)}</span>` : ''}
+                                ${n.actualTime ? `<span>实际：${formatTime(n.actualTime)}</span>` : ''}
+                                ${n.operator ? `<span>操作人：${n.operator}</span>` : ''}
+                            </div>
+                            ${n.remark ? `<div class="timeline-remark">备注：${n.remark}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('timeline').innerHTML = html;
+        }
+
+        function renderProviderSummary() {
+            const p = currentProgress;
+            const html = `
+                <div class="summary-grid">
+                    <div><span class="label">姓名：</span><span class="value">${p.providerName}</span></div>
+                    <div><span class="label">职业：</span><span class="value">${getProfessionLabel(p.professionType)}</span></div>
+                    <div><span class="label">城市：</span><span class="value">${p.city}</span></div>
+                </div>
+            `;
+            document.getElementById('provider-summary-content').innerHTML = html;
+        }
+
+        function renderActions() {
+            const p = currentProgress;
+            const status = p.currentStatus;
+            let html = '';
+
+            if (status === 'COMPLETED') {
+                html = `
+                    <div style="text-align:center; padding: 20px; color: #52c41a;">
+                        ✅ 服务已圆满完成
+                    </div>
+                `;
+            } else if (status === 'ABNORMAL_PAUSED') {
+                html = `
+                    <button class="btn btn-primary btn-block" onclick="showResumeModal()">▶ 恢复服务</button>
+                `;
+            } else {
+                const nextNodeMap = {
+                    'PENDING_VISIT': '开始服务',
+                    'IN_SERVICE': '完成服务（待验收）',
+                    'PENDING_ACCEPTANCE': '确认验收（完成）'
+                };
+                const nextBtnText = nextNodeMap[status] || '推进节点';
+
+                html = `
+                    <button class="btn btn-primary btn-block" onclick="showAdvanceModal()">
+                        ⏭ ${nextBtnText}
+                    </button>
+                    <button class="btn btn-danger btn-block" onclick="showPauseModal()" style="margin-top: 8px;">
+                        ⚠ 异常暂停
+                    </button>
+                `;
+            }
+
+            document.getElementById('action-area').innerHTML = html;
+        }
+
+        function showAdvanceModal() {
+            hideActionError();
+            const content = `
+                <div class="form-group">
+                    <label>进度说明</label>
+                    <textarea class="form-input" id="advance-remark" rows="3" placeholder="请填写当前节点的进度说明"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>下一节点预计完成时间</label>
+                    <input type="datetime-local" class="form-input" id="advance-estimated">
+                </div>
+                <div class="modal-error-tip" id="advance-error"></div>
+            `;
+            showModal('推进服务节点', content, async (modal) => {
+                const remark = document.getElementById('advance-remark').value.trim();
+                const estimated = document.getElementById('advance-estimated').value;
+                const errorEl = modal.querySelector('#advance-error');
+
+                try {
+                    const body = {
+                        operator: '管理员',
+                        remark: remark
+                    };
+                    if (estimated) {
+                        body.estimatedTime = estimated.replace('T', ' ') + ':00';
+                    }
+                    await request('/progress/' + progressId + '/advance', {
+                        method: 'POST',
+                        body: JSON.stringify(body)
+                    });
+                    showToast('节点推进成功', 'success');
+                    await loadProgress();
+                    return true;
+                } catch (e) {
+                    errorEl.textContent = e.message;
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+            }, '确认推进');
+        }
+
+        function showPauseModal() {
+            hideActionError();
+            const content = `
+                <div class="form-group">
+                    <label>暂停原因 <span style="color:#ff4d4f;">*</span></label>
+                    <textarea class="form-input" id="pause-reason" rows="3" placeholder="请填写异常暂停原因"></textarea>
+                </div>
+                <div class="modal-error-tip" id="pause-error"></div>
+            `;
+            showModal('异常暂停', content, async (modal) => {
+                const reason = document.getElementById('pause-reason').value.trim();
+                const errorEl = modal.querySelector('#pause-error');
+
+                if (!reason) {
+                    errorEl.textContent = '请填写暂停原因';
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+
+                try {
+                    await request('/progress/' + progressId + '/pause', {
+                        method: 'POST',
+                        body: JSON.stringify({ reason: reason, operator: '管理员' })
+                    });
+                    showToast('已暂停服务', 'success');
+                    await loadProgress();
+                    return true;
+                } catch (e) {
+                    errorEl.textContent = e.message;
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+            }, '确认暂停');
+        }
+
+        function showResumeModal() {
+            hideActionError();
+            const content = `
+                <div class="form-group">
+                    <label>确认恢复服务？</label>
+                    <div style="font-size: 13px; color: #666; margin-top: 5px;">
+                        恢复后将从当前待完成的节点继续推进
+                    </div>
+                </div>
+            `;
+            showModal('恢复服务', content, async () => {
+                try {
+                    await request('/progress/' + progressId + '/resume', {
+                        method: 'POST',
+                        body: JSON.stringify({ operator: '管理员' })
+                    });
+                    showToast('服务已恢复', 'success');
+                    await loadProgress();
+                    return true;
+                } catch (e) {
+                    showActionError(e.message);
+                    return false;
+                }
+            }, '确认恢复');
+        }
+
+        function showActionError(msg) {
+            const el = document.getElementById('action-error');
+            el.textContent = msg;
+            el.style.display = 'block';
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function hideActionError() {
+            const el = document.getElementById('action-error');
+            el.style.display = 'none';
+        }
+
+        async function init() {
+            progressId = getQueryParam('id');
+            if (!progressId) {
+                document.getElementById('service-info').innerHTML =
+                    '<div class="empty">缺少进度ID参数</div>';
+                return;
+            }
+            await loadProgress();
+        }
+
+        init();
+    </script>
+</body>
+</html>

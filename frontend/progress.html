@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务进度 - 家政服务中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏠 家政服务中介平台</h1>
+            <nav class="nav">
+                <a href="index.html">认证审核</a>
+                <a href="providers.html">服务商管理</a>
+                <a href="orders.html">需求管理</a>
+                <a href="contracts.html">合同管理</a>
+                <a href="progress.html" class="active">服务进度</a>
+            </nav>
+        </header>
+
+        <div class="page-header">
+            <h2>服务进度管理</h2>
+            <p class="subtitle">追踪服务进度，管理服务节点</p>
+        </div>
+
+        <div class="stats-section" id="progress-stats">
+            <div class="stat-card stat-total">
+                <div class="stat-label">总服务数</div>
+                <div class="stat-value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card stat-pending">
+                <div class="stat-label">待上门</div>
+                <div class="stat-value" id="stat-pending-visit">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">服务中</div>
+                <div class="stat-value" id="stat-in-service" style="color:#1890ff;">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">待验收</div>
+                <div class="stat-value" id="stat-pending-acceptance" style="color:#fa8c16;">0</div>
+            </div>
+            <div class="stat-card stat-approved">
+                <div class="stat-label">已完成</div>
+                <div class="stat-value" id="stat-completed">0</div>
+            </div>
+            <div class="stat-card stat-rejected">
+                <div class="stat-label">异常暂停</div>
+                <div class="stat-value" id="stat-abnormal">0</div>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-row">
+                <div class="filter-item">
+                    <label>进度状态：</label>
+                    <select class="form-select" id="filter-status" onchange="loadList()">
+                        <option value="">全部状态</option>
+                        <option value="PENDING_VISIT">待上门</option>
+                        <option value="IN_SERVICE">服务中</option>
+                        <option value="PENDING_ACCEPTANCE">待验收</option>
+                        <option value="COMPLETED">已完成</option>
+                        <option value="ABNORMAL_PAUSED">异常暂停</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>职业类型：</label>
+                    <select class="form-select" id="filter-profession" onchange="loadList()">
+                        <option value="">全部职业</option>
+                        <option value="BABYSITTER">保姆</option>
+                        <option value="REPAIRMAN">维修工</option>
+                        <option value="MATERNAL_NURSE">月嫂</option>
+                        <option value="CLEANER">保洁</option>
+                        <option value="COOK">厨师</option>
+                        <option value="DRIVER">司机</option>
+                        <option value="NURSING_WORKER">护工</option>
+                        <option value="TUTOR">家教</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>服务城市：</label>
+                    <select class="form-select" id="filter-city" onchange="loadList()">
+                        <option value="">全部城市</option>
+                        <option value="北京">北京</option>
+                        <option value="上海">上海</option>
+                        <option value="广州">广州</option>
+                        <option value="深圳">深圳</option>
+                        <option value="杭州">杭州</option>
+                        <option value="成都">成都</option>
+                        <option value="武汉">武汉</option>
+                        <option value="南京">南京</option>
+                        <option value="天津">天津</option>
+                        <option value="重庆">重庆</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <button class="btn btn-default" onclick="resetFilters()">重置筛选</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="list-section">
+            <div class="list-header">
+                <h3>服务进度列表</h3>
+                <span class="list-count" id="list-count">共 0 条</span>
+            </div>
+            <div id="progress-list" class="progress-list">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/common.js"></script>
+    <script>
+        const PROGRESS_STATUS_MAP = {
+            PENDING_VISIT: { label: '待上门', class: 'status-yellow' },
+            IN_SERVICE: { label: '服务中', class: 'status-blue' },
+            PENDING_ACCEPTANCE: { label: '待验收', class: 'status-orange' },
+            COMPLETED: { label: '已完成', class: 'status-green' },
+            ABNORMAL_PAUSED: { label: '异常暂停', class: 'status-red' }
+        };
+
+        function getProgressStatusInfo(status) {
+            return PROGRESS_STATUS_MAP[status] || { label: status, class: 'status-gray' };
+        }
+
+        async function loadStats() {
+            try {
+                const stats = await request('/progress/statistics');
+                document.getElementById('stat-total').textContent = stats.total || 0;
+                document.getElementById('stat-pending-visit').textContent = stats.pendingVisit || 0;
+                document.getElementById('stat-in-service').textContent = stats.inService || 0;
+                document.getElementById('stat-pending-acceptance').textContent = stats.pendingAcceptance || 0;
+                document.getElementById('stat-completed').textContent = stats.completed || 0;
+                document.getElementById('stat-abnormal').textContent = stats.abnormalPaused || 0;
+            } catch (e) {
+                console.error('加载统计失败', e);
+            }
+        }
+
+        async function loadList() {
+            const status = document.getElementById('filter-status').value;
+            const profession = document.getElementById('filter-profession').value;
+            const city = document.getElementById('filter-city').value;
+
+            let url = '/progress?';
+            if (status) url += 'status=' + status + '&';
+            if (profession) url += 'professionType=' + profession + '&';
+            if (city) url += 'city=' + city;
+
+            try {
+                const list = await request(url);
+                document.getElementById('list-count').textContent = '共 ' + list.length + ' 条';
+                renderList(list);
+            } catch (e) {
+                document.getElementById('progress-list').innerHTML =
+                    '<div class="empty">加载失败：' + e.message + '</div>';
+            }
+        }
+
+        function renderList(list) {
+            const container = document.getElementById('progress-list');
+            if (!list || list.length === 0) {
+                container.innerHTML = '<div class="empty">暂无服务进度记录</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(p => {
+                const st = getProgressStatusInfo(p.currentStatus);
+                return `
+                    <div class="progress-card">
+                        <div class="progress-card-header">
+                            <div class="progress-title">
+                                <span class="req-title">${p.requirementTitle}</span>
+                                <span class="status-tag ${st.class}">${st.label}</span>
+                            </div>
+                            <div class="progress-meta">
+                                <span>服务商：${p.providerName}</span>
+                                <span>职业：${getProfessionLabel(p.professionType)}</span>
+                                <span>城市：${p.city}</span>
+                                <span>预算：¥${p.budget}</span>
+                            </div>
+                        </div>
+                        <div class="progress-card-body">
+                            <div class="progress-current-node">
+                                <span class="label">当前节点：</span>
+                                <span class="value">${p.currentNode || '-'}</span>
+                            </div>
+                            <div class="progress-mini-timeline">
+                                ${renderMiniTimeline(p)}
+                            </div>
+                        </div>
+                        <div class="progress-card-footer">
+                            <span class="update-time">更新时间：${formatTime(p.updateTime)}</span>
+                            <div class="card-actions">
+                                <button class="btn btn-link btn-sm" onclick="viewDetail('${p.id}')">查看详情</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderMiniTimeline(p) {
+            const nodes = ['待上门', '服务中', '待验收', '已完成'];
+            const statusOrder = ['PENDING_VISIT', 'IN_SERVICE', 'PENDING_ACCEPTANCE', 'COMPLETED'];
+            const currentIdx = statusOrder.indexOf(p.currentStatus);
+
+            return nodes.map((name, i) => {
+                let cls = 'dot-pending';
+                if (p.currentStatus === 'ABNORMAL_PAUSED') {
+                    cls = i <= 2 ? 'dot-done' : 'dot-pending';
+                } else if (i < currentIdx) {
+                    cls = 'dot-done';
+                } else if (i === currentIdx) {
+                    cls = 'dot-current';
+                }
+                return `
+                    <div class="mini-timeline-item">
+                        <div class="mini-dot ${cls}"></div>
+                        <span class="mini-label">${name}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function viewDetail(id) {
+            window.location.href = 'progress-detail.html?id=' + id;
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-profession').value = '';
+            document.getElementById('filter-city').value = '';
+            loadList();
+        }
+
+        async function init() {
+            await loadStats();
+            await loadList();
+        }
+
+        init();
+    </script>
+</body>
+</html>
