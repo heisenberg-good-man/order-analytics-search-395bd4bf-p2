@@ -360,6 +360,15 @@ public class ProviderService {
         if (dto.getSubmittedMaterials() == null || dto.getSubmittedMaterials().isEmpty()) {
             throw new BusinessException("请至少提交一项认证材料");
         }
+        List<String> missingMaterials = new ArrayList<>();
+        for (String req : REQUIRED_MATERIALS) {
+            if (!dto.getSubmittedMaterials().contains(req)) {
+                missingMaterials.add(req);
+            }
+        }
+        if (!missingMaterials.isEmpty()) {
+            throw new BusinessException("缺少必填材料：" + String.join("、", missingMaterials));
+        }
         if (p.getProfessionType() == null || p.getProfessionType().trim().isEmpty()) {
             throw new BusinessException("请先完善期望职业信息");
         }

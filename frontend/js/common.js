@@ -52,10 +52,6 @@ function showModalError(modal, message) {
     }
     errEl.textContent = message;
     errEl.style.display = 'block';
-    clearTimeout(errEl._hideTimer);
-    errEl._hideTimer = setTimeout(() => {
-        errEl.style.display = 'none';
-    }, 4000);
 }
 
 const PROFESSION_MAP = {
