@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>需求管理 - 中介平台</title>
+    <title>合同管理 - 中介平台</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -14,35 +14,34 @@
         </div>
         <nav class="nav-links">
             <a href="index.html">服务商管理</a>
-            <a href="orders.html" class="active">需求管理</a>
+            <a href="orders.html">需求管理</a>
             <a href="form.html">入驻资料</a>
-            <a href="contracts.html">合同管理</a>
+            <a href="contracts.html" class="active">合同管理</a>
         </nav>
     </header>
 
     <main class="app-main">
-        <h1 class="page-title">需求管理工作台</h1>
+        <h1 class="page-title">合同管理工作台</h1>
 
         <div id="stats-container"></div>
 
         <div class="card">
             <div class="card-title">
-                <span>需求列表</span>
-                <button class="btn btn-primary" onclick="goToCreate()">+ 发布需求</button>
+                <span>合同列表</span>
             </div>
 
             <div class="filter-bar">
                 <div class="form-group search-group">
                     <label class="form-label">关键词搜索</label>
-                    <input type="text" class="form-input" id="keyword" placeholder="需求标题 / 描述 / 联系人">
+                    <input type="text" class="form-input" id="keyword" placeholder="合同编号 / 需求标题 / 服务商">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">需求状态</label>
+                    <label class="form-label">合同状态</label>
                     <select class="form-select" id="status">
                         <option value="">全部状态</option>
-                        <option value="OPEN">进行中</option>
-                        <option value="MATCHED">已匹配</option>
-                        <option value="CLOSED">已关闭</option>
+                        <option value="DRAFT">草案中</option>
+                        <option value="SIGNED">已签约</option>
+                        <option value="REJECTED">已驳回</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -58,7 +57,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <button class="btn btn-primary" onclick="loadRequirements()">搜索</button>
+                    <button class="btn btn-primary" onclick="loadContracts()">搜索</button>
                     <button class="btn" onclick="resetFilters()" style="margin-left:8px;">重置</button>
                 </div>
             </div>
@@ -66,19 +65,20 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>需求编号</th>
+                        <th>合同编号</th>
                         <th>需求标题</th>
+                        <th>服务商</th>
                         <th>服务类型</th>
                         <th>服务城市</th>
-                        <th>所需技能</th>
-                        <th>联系人</th>
+                        <th>预算</th>
                         <th>状态</th>
-                        <th>发布时间</th>
+                        <th>双方确认</th>
+                        <th>创建时间</th>
                         <th>操作</th>
                     </tr>
                 </thead>
-                <tbody id="req-list">
-                    <tr><td colspan="9" class="empty">加载中...</td></tr>
+                <tbody id="contract-list">
+                    <tr><td colspan="10" class="empty">加载中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -86,14 +86,14 @@
 
     <script src="js/common.js?v=2"></script>
     <script>
-        const REQ_STATUS_MAP = {
-            OPEN: { label: '进行中', class: 'status-tag status-blue' },
-            MATCHED: { label: '已匹配', class: 'status-tag status-green' },
-            CLOSED: { label: '已关闭', class: 'status-tag status-gray' }
+        const CONTRACT_STATUS_MAP = {
+            DRAFT: { label: '草案中', class: 'status-tag status-yellow' },
+            SIGNED: { label: '已签约', class: 'status-tag status-green' },
+            REJECTED: { label: '已驳回', class: 'status-tag status-red' }
         };
 
-        function getReqStatusInfo(status) {
-            return REQ_STATUS_MAP[status] || { label: status, class: 'status-tag status-gray' };
+        function getContractStatusInfo(status) {
+            return CONTRACT_STATUS_MAP[status] || { label: status, class: 'status-tag status-gray' };
         }
 
         async function loadDict() {
@@ -122,24 +122,24 @@
 
         async function loadStats() {
             try {
-                const stats = await request('/requirements/statistics');
+                const stats = await request('/contracts/statistics');
                 const html = `
                     <div class="stats-grid">
                         <div class="stat-card stat-total">
-                            <div class="stat-label">总需求数</div>
+                            <div class="stat-label">合同总数</div>
                             <div class="stat-value">${stats.total}</div>
                         </div>
                         <div class="stat-card stat-pending">
-                            <div class="stat-label">进行中</div>
-                            <div class="stat-value">${stats.open}</div>
+                            <div class="stat-label">草案中</div>
+                            <div class="stat-value">${stats.draft}</div>
                         </div>
                         <div class="stat-card stat-approved">
-                            <div class="stat-label">已匹配</div>
-                            <div class="stat-value">${stats.matched}</div>
+                            <div class="stat-label">已签约</div>
+                            <div class="stat-value">${stats.signed}</div>
                         </div>
                         <div class="stat-card stat-rejected">
-                            <div class="stat-label">已关闭</div>
-                            <div class="stat-value">${stats.closed}</div>
+                            <div class="stat-label">已驳回</div>
+                            <div class="stat-value">${stats.rejected}</div>
                         </div>
                     </div>
                 `;
@@ -149,7 +149,7 @@
             }
         }
 
-        async function loadRequirements() {
+        async function loadContracts() {
             const keyword = document.getElementById('keyword').value;
             const status = document.getElementById('status').value;
             const professionType = document.getElementById('professionType').value;
@@ -162,36 +162,36 @@
             if (city) params.set('city', city);
 
             try {
-                const list = await request('/requirements?' + params.toString());
-                const tbody = document.getElementById('req-list');
+                const list = await request('/contracts?' + params.toString());
+                const tbody = document.getElementById('contract-list');
                 if (list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无数据</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="10" class="empty">暂无数据</td></tr>';
                     return;
                 }
-                tbody.innerHTML = list.map(r => {
-                    const st = getReqStatusInfo(r.status);
-                    const skills = (r.requiredSkills || []).map(s =>
-                        `<span class="skill-tag">${s}</span>`
-                    ).join('');
+                tbody.innerHTML = list.map(c => {
+                    const st = getContractStatusInfo(c.status);
+                    const providerConf = c.providerConfirmed ? '<span style="color:#52c41a;">✓ 服务商</span>' : '<span style="color:#999;">○ 服务商</span>';
+                    const demanderConf = c.demanderConfirmed ? '<span style="color:#52c41a;">✓ 需求方</span>' : '<span style="color:#999;">○ 需求方</span>';
                     return `
                         <tr>
-                            <td>${r.id}</td>
-                            <td>${r.title}</td>
-                            <td>${getProfessionLabel(r.professionType)}</td>
-                            <td>${r.city}</td>
-                            <td><div class="skill-tags">${skills || '-'}</div></td>
-                            <td>${r.contactName}</td>
+                            <td>${c.id}</td>
+                            <td>${c.requirementTitle}</td>
+                            <td>${c.providerName}</td>
+                            <td>${getProfessionLabel(c.professionType)}</td>
+                            <td>${c.city}</td>
+                            <td>¥${c.budget}</td>
                             <td><span class="${st.class}">${st.label}</span></td>
-                            <td>${formatTime(r.createTime)}</td>
+                            <td style="font-size:12px;">${providerConf} ${demanderConf}</td>
+                            <td>${formatTime(c.createTime)}</td>
                             <td class="actions">
-                                <button class="btn btn-sm btn-primary" onclick="goToDetail('${r.id}')">查看推荐</button>
+                                <button class="btn btn-sm btn-primary" onclick="goToDetail('${c.id}')">查看详情</button>
                             </td>
                         </tr>
                     `;
                 }).join('');
             } catch (e) {
-                document.getElementById('req-list').innerHTML =
-                    '<tr><td colspan="9" class="empty">加载失败：' + e.message + '</td></tr>';
+                document.getElementById('contract-list').innerHTML =
+                    '<tr><td colspan="10" class="empty">加载失败：' + e.message + '</td></tr>';
             }
         }
 
@@ -200,21 +200,17 @@
             document.getElementById('status').value = '';
             document.getElementById('professionType').value = '';
             document.getElementById('cityFilter').value = '';
-            loadRequirements();
+            loadContracts();
         }
 
         function goToDetail(id) {
-            window.location.href = 'order-detail.html?id=' + id;
-        }
-
-        function goToCreate() {
-            window.location.href = 'order-form.html';
+            window.location.href = 'contract-detail.html?id=' + id;
         }
 
         (async function init() {
             await loadDict();
             await loadStats();
-            await loadRequirements();
+            await loadContracts();
         })();
     </script>
 </body>

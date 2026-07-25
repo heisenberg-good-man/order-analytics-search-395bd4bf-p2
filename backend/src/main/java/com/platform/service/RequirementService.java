@@ -48,6 +48,9 @@ public class RequirementService {
         String[] contacts = {"张女士", "李先生", "王太太", "赵先生", "孙阿姨", "周先生"};
         String[] phones = {"13900000001", "13900000002", "13900000003", "13900000004", "13900000005", "13900000006"};
         String[] statuses = {"OPEN", "OPEN", "OPEN", "OPEN", "MATCHED", "CLOSED"};
+        String[] budgets = {"6000", "300", "15000", "2000", "5000", "8000"};
+        String[] startDates = {"2026-08-01", "2026-07-26", "2026-08-15", "2026-08-01", "2026-08-01", "2026-07-20"};
+        String[] endDates = {"2026-10-31", "2026-07-26", "2026-11-15", "2026-08-31", "2026-08-31", "2026-07-31"};
 
         for (int i = 0; i < 6; i++) {
             Requirement r = new Requirement();
@@ -60,6 +63,9 @@ public class RequirementService {
             r.setRequiredSkills(Arrays.asList(skills[i]));
             r.setContactName(contacts[i]);
             r.setContactPhone(phones[i]);
+            r.setBudget(new java.math.BigDecimal(budgets[i]));
+            r.setServiceStartTime(startDates[i]);
+            r.setServiceEndTime(endDates[i]);
             r.setStatus(statuses[i]);
             r.setCreateTime(LocalDateTime.now().minusDays(i + 1));
             r.setUpdateTime(LocalDateTime.now().minusDays(i));
@@ -125,6 +131,9 @@ public class RequirementService {
         r.setProfessionType(dto.getProfessionType());
         r.setCity(dto.getCity());
         r.setRequiredSkills(dto.getRequiredSkills());
+        r.setBudget(dto.getBudget());
+        r.setServiceStartTime(dto.getServiceStartTime());
+        r.setServiceEndTime(dto.getServiceEndTime());
         r.setContactName(dto.getContactName());
         r.setContactPhone(dto.getContactPhone());
         r.setStatus("OPEN");

@@ -16,6 +16,7 @@
             <a href="index.html">服务商管理</a>
             <a href="orders.html" class="active">需求管理</a>
             <a href="form.html">入驻资料</a>
+            <a href="contracts.html">合同管理</a>
         </nav>
     </header>
 
@@ -57,6 +58,21 @@
                 <div style="margin-top: 10px;">
                     <span class="label" style="color:#666;font-size:13px;">技能标签：</span>
                     <span id="sel-skills" style="font-size:13px;"></span>
+                </div>
+                <div style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <button class="btn btn-primary btn-sm" onclick="openContractModal()" id="gen-contract-btn">📝 生成合同草案</button>
+                    <span id="contract-hint" style="font-size:12px;color:#999;"></span>
+                </div>
+                <div id="contract-error" class="action-error-tip"></div>
+            </div>
+
+            <div class="card" id="contract-section" style="display:none;">
+                <div class="card-title">
+                    <span>合同记录</span>
+                    <span class="section-hint">该需求相关的合同草案</span>
+                </div>
+                <div id="contract-list-area">
+                    <div class="empty">加载中...</div>
                 </div>
             </div>
 
@@ -301,6 +317,254 @@
         function viewProvider(id) {
             window.open('detail.html?id=' + id, '_blank');
         }
+
+        const CONTRACT_STATUS_MAP = {
+            DRAFT: { label: '草案中', class: 'status-tag status-yellow' },
+            SIGNED: { label: '已签约', class: 'status-tag status-green' },
+            REJECTED: { label: '已驳回', class: 'status-tag status-red' }
+        };
+
+        function getContractStatusInfo(status) {
+            return CONTRACT_STATUS_MAP[status] || { label: status, class: 'status-tag status-gray' };
+        }
+
+        function showContractError(msg) {
+            const el = document.getElementById('contract-error');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.display = 'block';
+            clearTimeout(showContractError._timer);
+            showContractError._timer = setTimeout(() => {
+                el.style.display = 'none';
+            }, 5000);
+        }
+
+        function hideContractError() {
+            const el = document.getElementById('contract-error');
+            if (el) el.style.display = 'none';
+        }
+
+        function updateContractButtonState() {
+            const btn = document.getElementById('gen-contract-btn');
+            const hint = document.getElementById('contract-hint');
+            if (!btn || !hint) return;
+
+            if (!selectedProviderId) {
+                btn.disabled = true;
+                hint.textContent = '请先选择一个推荐的服务商';
+                return;
+            }
+
+            const r = recommendResults.find(x => x.provider.id === selectedProviderId);
+            if (!r) {
+                btn.disabled = true;
+                hint.textContent = '未找到对应服务商信息';
+                return;
+            }
+
+            if (r.provider.verifyStatus !== 'APPROVED') {
+                btn.disabled = true;
+                const st = getStatusInfo(r.provider.verifyStatus);
+                hint.textContent = '服务商当前为' + st.label + '状态，不能生成合同';
+                return;
+            }
+
+            if (currentReq && (currentReq.status === 'CLOSED' || currentReq.status === 'SIGNED')) {
+                btn.disabled = true;
+                const st = getReqStatusInfo(currentReq.status);
+                hint.textContent = '需求已' + st.label + '，不能生成合同';
+                return;
+            }
+
+            btn.disabled = false;
+            hint.textContent = '';
+        }
+
+        function openContractModal() {
+            hideContractError();
+            if (!selectedProviderId || !currentReq) return;
+
+            const r = recommendResults.find(x => x.provider.id === selectedProviderId);
+            if (!r) return;
+
+            const p = r.provider;
+            const budget = currentReq.budget || 0;
+            const startTime = currentReq.serviceStartTime || '';
+            const endTime = currentReq.serviceEndTime || '';
+
+            const contentHtml = `
+                <div id="modal-contract-error" class="modal-error-tip" style="display:none;"></div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">合同草案预览</div>
+                    <ul class="info-list info-list-sm">
+                        <li><span class="label">需求标题</span><span class="value">${currentReq.title}</span></li>
+                        <li><span class="label">服务商</span><span class="value">${p.name} (${p.id})</span></li>
+                        <li><span class="label">认证状态</span><span class="value"><span class="status-tag status-green" style="font-size:12px;padding:2px 8px;">已认证</span></span></li>
+                        <li><span class="label">服务城市</span><span class="value">${p.city}</span></li>
+                        <li><span class="label">职业类型</span><span class="value">${getProfessionLabel(p.professionType)}</span></li>
+                    </ul>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">合同信息</div>
+                    <div class="form-group">
+                        <label class="form-label">预算金额（元）<span class="required">*</span></label>
+                        <input type="number" class="form-input" id="contract-budget" value="${budget}" min="0" step="0.01">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">服务开始时间<span class="required">*</span></label>
+                            <input type="date" class="form-input" id="contract-start" value="${startTime}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">服务结束时间<span class="required">*</span></label>
+                            <input type="date" class="form-input" id="contract-end" value="${endTime}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-textarea" id="contract-remark" rows="3" placeholder="补充说明（选填）"></textarea>
+                    </div>
+                </div>
+            `;
+
+            const modal = showModal('生成合同草案', contentHtml, async (m) => {
+                const budget = document.getElementById('contract-budget').value;
+                const startTime = document.getElementById('contract-start').value;
+                const endTime = document.getElementById('contract-end').value;
+                const remark = document.getElementById('contract-remark').value.trim();
+                const errEl = document.getElementById('modal-contract-error');
+
+                if (!budget || parseFloat(budget) <= 0) {
+                    errEl.textContent = '请填写有效的预算金额';
+                    errEl.style.display = 'block';
+                    return false;
+                }
+                if (!startTime) {
+                    errEl.textContent = '请选择服务开始时间';
+                    errEl.style.display = 'block';
+                    return false;
+                }
+                if (!endTime) {
+                    errEl.textContent = '请选择服务结束时间';
+                    errEl.style.display = 'block';
+                    return false;
+                }
+                if (startTime > endTime) {
+                    errEl.textContent = '结束时间不能早于开始时间';
+                    errEl.style.display = 'block';
+                    return false;
+                }
+
+                const confirmBtn = m.querySelector('[data-action="confirm"]');
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = '生成中...';
+
+                try {
+                    const result = await request('/contracts', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            requirementId: currentReq.id,
+                            providerId: selectedProviderId,
+                            budget: parseFloat(budget),
+                            serviceStartTime: startTime,
+                            serviceEndTime: endTime,
+                            remark: remark || null
+                        })
+                    });
+                    showToast('合同草案生成成功', 'success');
+                    await loadContracts();
+                    await loadRequirementDetail();
+                    return true;
+                } catch (e) {
+                    errEl.textContent = e.message || '生成失败，请重试';
+                    errEl.style.display = 'block';
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = '确认生成';
+                    return false;
+                }
+            }, '确认生成');
+
+            const confirmBtn = modal.querySelector('[data-action="confirm"]');
+            confirmBtn.textContent = '确认生成';
+        }
+
+        async function loadContracts() {
+            if (!currentReq) return;
+            try {
+                const contracts = await request('/contracts/by-requirement/' + currentReq.id);
+                renderContracts(contracts);
+            } catch (e) {
+                document.getElementById('contract-list-area').innerHTML =
+                    '<div class="empty">加载合同失败：' + e.message + '</div>';
+            }
+        }
+
+        function renderContracts(contracts) {
+            const section = document.getElementById('contract-section');
+            const listArea = document.getElementById('contract-list-area');
+
+            if (!contracts || contracts.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            listArea.innerHTML = contracts.map(c => {
+                const st = getContractStatusInfo(c.status);
+                return `
+                    <div style="padding:12px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:500;margin-bottom:4px;">
+                                ${c.id} <span class="${st.class}" style="font-size:12px;padding:2px 8px;margin-left:8px;">${st.label}</span>
+                            </div>
+                            <div style="font-size:13px;color:#666;">
+                                服务商：${c.providerName} · 预算：¥${c.budget} · 服务时间：${c.serviceStartTime} 至 ${c.serviceEndTime}
+                            </div>
+                            <div style="font-size:12px;color:#999;margin-top:4px;">
+                                创建时间：${formatTime(c.createTime)}
+                                ${c.providerConfirmed ? ' · 服务商已确认' : ' · 服务商待确认'}
+                                ${c.demanderConfirmed ? ' · 需求方已确认' : ' · 需求方待确认'}
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="goToContractDetail('${c.id}')">查看合同</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function goToContractDetail(id) {
+            window.location.href = 'contract-detail.html?id=' + id;
+        }
+
+        async function loadRequirementDetail() {
+            const id = getReqId();
+            if (!id) return;
+            try {
+                const req = await request('/requirements/' + id);
+                currentReq = req;
+                const st = getReqStatusInfo(req.status);
+                const statusEl = document.getElementById('req-status');
+                statusEl.className = st.class;
+                statusEl.textContent = st.label;
+            } catch (e) {
+                console.error('刷新需求详情失败:', e);
+            }
+        }
+
+        const origUpdateSelectedSummary = updateSelectedSummary;
+        updateSelectedSummary = function() {
+            origUpdateSelectedSummary();
+            updateContractButtonState();
+        };
+
+        const origLoadRequirement = loadRequirement;
+        loadRequirement = async function() {
+            await origLoadRequirement();
+            if (currentReq) {
+                await loadContracts();
+                updateContractButtonState();
+            }
+        };
 
         (async function init() {
             await loadRequirement();

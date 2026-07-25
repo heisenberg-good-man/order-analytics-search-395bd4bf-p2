@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发布需求 - 中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <div class="logo">中</div>
+            <span>社区服务中介平台</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">服务商管理</a>
+            <a href="orders.html" class="active">需求管理</a>
+            <a href="form.html">入驻资料</a>
+            <a href="contracts.html">合同管理</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <div class="breadcrumb">
+            <a href="orders.html">需求管理</a>
+            <span class="sep">/</span>
+            <span>发布需求</span>
+        </div>
+
+        <div class="card">
+            <div class="card-title">发布服务需求</div>
+
+            <div id="form-error" class="field-error-tip" style="display:none;"></div>
+
+            <form id="req-form" onsubmit="return false;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">需求标题<span class="required">*</span></label>
+                        <input type="text" class="form-input" id="title" placeholder="请输入需求标题，如：急需住家保姆照顾老人">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">服务类型<span class="required">*</span></label>
+                        <select class="form-select" id="professionType" onchange="updateSkillOptions()">
+                            <option value="">请选择服务类型</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">服务城市<span class="required">*</span></label>
+                        <select class="form-select" id="city">
+                            <option value="">请选择城市</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">技能标签</label>
+                    <div class="section-hint">选择与需求相关的技能标签，便于精准匹配服务商</div>
+                    <div id="skill-options" class="skill-options-box" style="margin-top:8px;">
+                        <span style="color:#999;font-size:13px;">请先选择服务类型</span>
+                    </div>
+                    <div class="selected-skills-box" id="selected-skills" style="margin-top:8px;"></div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">预算（元）<span class="required">*</span></label>
+                        <input type="number" class="form-input" id="budget" placeholder="请输入预算金额" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">服务时间<span class="required">*</span></label>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <input type="date" class="form-input" id="serviceStartTime" style="flex:1;">
+                            <span style="color:#999;">至</span>
+                            <input type="date" class="form-input" id="serviceEndTime" style="flex:1;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">需求描述</label>
+                    <textarea class="form-textarea" id="description" rows="4" placeholder="请详细描述您的需求，包括服务内容、特殊要求等"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">联系人<span class="required">*</span></label>
+                        <input type="text" class="form-input" id="contactName" placeholder="请输入联系人姓名">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">联系电话<span class="required">*</span></label>
+                        <input type="tel" class="form-input" id="contactPhone" placeholder="请输入联系电话">
+                    </div>
+                </div>
+
+                <div class="action-footer">
+                    <button type="button" class="btn btn-lg" onclick="goBack()">取消</button>
+                    <button type="button" class="btn btn-lg btn-primary" onclick="submitForm()" id="submit-btn">发布需求</button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <script src="js/common.js?v=2"></script>
+    <script>
+        const SKILL_MAP = {
+            BABYSITTER: ['做饭', '带孩子', '打扫卫生', '老人护理', '早教', '洗衣服'],
+            REPAIRMAN: ['家电维修', '水电维修', '管道疏通', '家具组装', '墙面修补', '开锁换锁'],
+            MATERNAL_NURSE: ['新生儿护理', '产妇护理', '月子餐', '乳房护理', '产后修复', '婴儿早教'],
+            CLEANER: ['日常保洁', '深度保洁', '开荒保洁', '玻璃清洁', '地毯清洗', '油烟机清洗'],
+            COOK: ['家常菜', '川菜', '粤菜', '湘菜', '月子餐', '营养餐'],
+            DRIVER: ['C1驾照', '长途驾驶', '商务接待', '代驾', '接送孩子', '货运搬运'],
+            NURSING_WORKER: ['老人护理', '病人护理', '康复护理', '卧床护理', '医院陪护', '居家养老'],
+            TUTOR: ['小学语文', '小学数学', '小学英语', '初中语文', '初中数学', '初中英语']
+        };
+
+        let selectedSkills = [];
+
+        async function loadDict() {
+            try {
+                const professions = await request('/dict/profession-types');
+                const sel = document.getElementById('professionType');
+                professions.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.value;
+                    opt.textContent = p.label;
+                    sel.appendChild(opt);
+                });
+
+                const cities = await request('/dict/cities');
+                const citySel = document.getElementById('city');
+                cities.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    citySel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('加载字典失败:', e);
+            }
+        }
+
+        function updateSkillOptions() {
+            const profession = document.getElementById('professionType').value;
+            const box = document.getElementById('skill-options');
+            selectedSkills = [];
+            renderSelectedSkills();
+
+            if (!profession) {
+                box.innerHTML = '<span style="color:#999;font-size:13px;">请先选择服务类型</span>';
+                return;
+            }
+
+            const skills = SKILL_MAP[profession] || [];
+            if (skills.length === 0) {
+                box.innerHTML = '<span style="color:#999;font-size:13px;">暂无技能选项</span>';
+                return;
+            }
+
+            box.innerHTML = skills.map(s => `
+                <label class="skill-opt">
+                    <input type="checkbox" value="${s}" onchange="toggleSkill('${s}', this.checked)">
+                    ${s}
+                </label>
+            `).join('');
+        }
+
+        function toggleSkill(skill, checked) {
+            if (checked) {
+                if (!selectedSkills.includes(skill)) {
+                    selectedSkills.push(skill);
+                }
+            } else {
+                selectedSkills = selectedSkills.filter(s => s !== skill);
+            }
+            renderSelectedSkills();
+        }
+
+        function renderSelectedSkills() {
+            const box = document.getElementById('selected-skills');
+            if (selectedSkills.length === 0) {
+                box.innerHTML = '';
+                return;
+            }
+            box.innerHTML = selectedSkills.map(s => `
+                <span class="skill-tag skill-tag-removable" onclick="removeSkill('${s}')">${s} ×</span>
+            `).join('');
+        }
+
+        function removeSkill(skill) {
+            selectedSkills = selectedSkills.filter(s => s !== skill);
+            const checkbox = document.querySelector(`#skill-options input[value="${skill}"]`);
+            if (checkbox) checkbox.checked = false;
+            renderSelectedSkills();
+        }
+
+        function showFormError(msg) {
+            const el = document.getElementById('form-error');
+            el.textContent = msg;
+            el.style.display = 'block';
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function hideFormError() {
+            document.getElementById('form-error').style.display = 'none';
+        }
+
+        function validateForm() {
+            const title = document.getElementById('title').value.trim();
+            const professionType = document.getElementById('professionType').value;
+            const city = document.getElementById('city').value;
+            const budget = document.getElementById('budget').value;
+            const startTime = document.getElementById('serviceStartTime').value;
+            const endTime = document.getElementById('serviceEndTime').value;
+            const contactName = document.getElementById('contactName').value.trim();
+            const contactPhone = document.getElementById('contactPhone').value.trim();
+
+            if (!title) { showFormError('请输入需求标题'); return false; }
+            if (!professionType) { showFormError('请选择服务类型'); return false; }
+            if (!city) { showFormError('请选择服务城市'); return false; }
+            if (!budget || parseFloat(budget) <= 0) { showFormError('请填写有效的预算金额'); return false; }
+            if (!startTime) { showFormError('请选择服务开始时间'); return false; }
+            if (!endTime) { showFormError('请选择服务结束时间'); return false; }
+            if (startTime > endTime) { showFormError('服务结束时间不能早于开始时间'); return false; }
+            if (!contactName) { showFormError('请输入联系人姓名'); return false; }
+            if (!contactPhone) { showFormError('请输入联系电话'); return false; }
+            if (!/^1[3-9]\d{9}$/.test(contactPhone)) { showFormError('请输入正确的手机号码'); return false; }
+
+            return true;
+        }
+
+        async function submitForm() {
+            hideFormError();
+
+            if (!validateForm()) return;
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = '发布中...';
+
+            const data = {
+                title: document.getElementById('title').value.trim(),
+                professionType: document.getElementById('professionType').value,
+                city: document.getElementById('city').value,
+                requiredSkills: selectedSkills.length > 0 ? selectedSkills : null,
+                budget: parseFloat(document.getElementById('budget').value),
+                serviceStartTime: document.getElementById('serviceStartTime').value,
+                serviceEndTime: document.getElementById('serviceEndTime').value,
+                description: document.getElementById('description').value.trim() || null,
+                contactName: document.getElementById('contactName').value.trim(),
+                contactPhone: document.getElementById('contactPhone').value.trim()
+            };
+
+            try {
+                const result = await request('/requirements', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                showToast('需求发布成功', 'success');
+                setTimeout(() => {
+                    window.location.href = 'order-detail.html?id=' + result.id;
+                }, 800);
+            } catch (e) {
+                showFormError(e.message || '发布失败，请重试');
+                btn.disabled = false;
+                btn.textContent = '发布需求';
+            }
+        }
+
+        function goBack() {
+            window.history.back();
+        }
+
+        (async function init() {
+            await loadDict();
+        })();
+    </script>
+</body>
+</html>

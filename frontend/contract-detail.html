@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>合同详情 - 中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <div class="logo">中</div>
+            <span>社区服务中介平台</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">服务商管理</a>
+            <a href="orders.html">需求管理</a>
+            <a href="form.html">入驻资料</a>
+            <a href="contracts.html" class="active">合同管理</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <div class="breadcrumb">
+            <a href="contracts.html">合同管理</a>
+            <span class="sep">/</span>
+            <span>合同详情</span>
+        </div>
+
+        <div id="contract-container" style="display:none;">
+            <div class="card">
+                <div class="card-title">
+                    <span id="contract-id">-</span>
+                    <span id="contract-status" class="status-tag">-</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <div>
+                        <div style="font-size:15px;font-weight:600;margin-bottom:12px;color:#333;">需求信息</div>
+                        <ul class="info-list info-list-sm">
+                            <li><span class="label">需求标题</span><span class="value" id="req-title">-</span></li>
+                            <li><span class="label">需求编号</span><span class="value">
+                                <a href="order-detail.html" id="req-link">-</a>
+                            </span></li>
+                            <li><span class="label">服务城市</span><span class="value" id="req-city">-</span></li>
+                            <li><span class="label">服务类型</span><span class="value" id="req-profession">-</span></li>
+                            <li><span class="label">技能标签</span><span class="value" id="req-skills">-</span></li>
+                            <li><span class="label">服务时间</span><span class="value" id="req-time">-</span></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div style="font-size:15px;font-weight:600;margin-bottom:12px;color:#333;">服务商信息</div>
+                        <ul class="info-list info-list-sm">
+                            <li><span class="label">服务商</span><span class="value" id="provider-name">-</span></li>
+                            <li><span class="label">服务商编号</span><span class="value">
+                                <a href="detail.html" id="provider-link">-</a>
+                            </span></li>
+                            <li><span class="label">认证状态</span><span class="value" id="provider-verify">-</span></li>
+                            <li><span class="label">认证摘要</span><span class="value" id="provider-summary">-</span></li>
+                            <li><span class="label">职业类型</span><span class="value" id="provider-profession">-</span></li>
+                            <li><span class="label">所在城市</span><span class="value" id="provider-city">-</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>合同条款</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <ul class="info-list">
+                        <li><span class="label">预算金额</span><span class="value" style="color:#fa8c16;font-weight:600;font-size:16px;" id="contract-budget">-</span></li>
+                        <li><span class="label">服务开始时间</span><span class="value" id="contract-start">-</span></li>
+                        <li><span class="label">服务结束时间</span><span class="value" id="contract-end">-</span></li>
+                    </ul>
+                    <ul class="info-list">
+                        <li><span class="label">服务商确认</span><span class="value" id="provider-confirmed">-</span></li>
+                        <li><span class="label">需求方确认</span><span class="value" id="demander-confirmed">-</span></li>
+                        <li><span class="label">创建时间</span><span class="value" id="contract-create-time">-</span></li>
+                        <li><span class="label">更新时间</span><span class="value" id="contract-update-time">-</span></li>
+                    </ul>
+                </div>
+                <div style="margin-top:16px;">
+                    <div style="color:#666;margin-bottom:8px;font-size:13px;">备注</div>
+                    <div style="background:#fafafa;padding:12px 16px;border-radius:6px;border:1px solid #e8e8e8;color:#333;" id="contract-remark">-</div>
+                </div>
+                <div id="reject-reason-box" style="display:none;margin-top:16px;">
+                    <div style="color:#ff4d4f;margin-bottom:8px;font-size:13px;font-weight:500;">驳回原因</div>
+                    <div style="background:#fff1f0;padding:12px 16px;border-radius:6px;border:1px solid #ffa39e;color:#595959;" id="reject-reason-text">-</div>
+                </div>
+            </div>
+
+            <div id="action-section" class="card">
+                <div class="card-title">
+                    <span>合同操作</span>
+                </div>
+                <div id="action-error" class="action-error-tip"></div>
+                <div class="action-bar">
+                    <button class="btn btn-success btn-lg" id="btn-provider-sign" onclick="signContract('provider')">服务商确认签约</button>
+                    <button class="btn btn-primary btn-lg" id="btn-demander-sign" onclick="signContract('demander')">需求方确认签约</button>
+                    <button class="btn btn-danger btn-lg" id="btn-reject" onclick="openRejectModal()">驳回合同</button>
+                </div>
+                <div style="margin-top:12px;font-size:12px;color:#999;">
+                    提示：双方均确认后，合同将正式生效，需求状态同步更新
+                </div>
+            </div>
+        </div>
+
+        <div id="error-container" class="card" style="display:none;text-align:center;">
+            <div id="error-msg" style="color:#ff4d4f;padding:40px;">加载失败</div>
+        </div>
+    </main>
+
+    <script src="js/common.js?v=2"></script>
+    <script>
+        let currentContract = null;
+
+        const CONTRACT_STATUS_MAP = {
+            DRAFT: { label: '草案中', class: 'status-tag status-yellow' },
+            SIGNED: { label: '已签约', class: 'status-tag status-green' },
+            REJECTED: { label: '已驳回', class: 'status-tag status-red' }
+        };
+
+        function getContractStatusInfo(status) {
+            return CONTRACT_STATUS_MAP[status] || { label: status, class: 'status-tag status-gray' };
+        }
+
+        function getContractId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+
+        function showError(msg) {
+            document.getElementById('contract-container').style.display = 'none';
+            document.getElementById('error-container').style.display = 'block';
+            document.getElementById('error-msg').textContent = msg;
+        }
+
+        async function loadContract() {
+            const id = getContractId();
+            if (!id) {
+                showError('缺少合同ID');
+                return;
+            }
+            try {
+                const contract = await request('/contracts/' + id);
+                currentContract = contract;
+                renderContract(contract);
+            } catch (e) {
+                showError(e.message);
+            }
+        }
+
+        function renderContract(c) {
+            document.getElementById('contract-container').style.display = 'block';
+            document.getElementById('error-container').style.display = 'none';
+
+            document.getElementById('contract-id').textContent = '合同编号：' + c.id;
+            const st = getContractStatusInfo(c.status);
+            const statusEl = document.getElementById('contract-status');
+            statusEl.className = st.class;
+            statusEl.textContent = st.label;
+
+            document.getElementById('req-title').textContent = c.requirementTitle;
+            const reqLink = document.getElementById('req-link');
+            reqLink.textContent = c.requirementId;
+            reqLink.href = 'order-detail.html?id=' + c.requirementId;
+            document.getElementById('req-city').textContent = c.city;
+            document.getElementById('req-profession').textContent = getProfessionLabel(c.professionType);
+
+            const skills = (c.skillTags || []).map(s =>
+                `<span class="skill-tag">${s}</span>`
+            ).join('');
+            document.getElementById('req-skills').innerHTML = skills || '-';
+            document.getElementById('req-time').textContent = c.serviceStartTime + ' 至 ' + c.serviceEndTime;
+
+            document.getElementById('provider-name').textContent = c.providerName;
+            const providerLink = document.getElementById('provider-link');
+            providerLink.textContent = c.providerId;
+            providerLink.href = 'detail.html?id=' + c.providerId;
+            providerLink.target = '_blank';
+
+            const verifySt = getStatusInfo(c.providerVerifyStatus);
+            document.getElementById('provider-verify').innerHTML =
+                `<span class="${verifySt.class}" style="font-size:12px;padding:2px 8px;">${verifySt.label}</span>`;
+            document.getElementById('provider-summary').textContent = c.providerVerifySummary || '-';
+            document.getElementById('provider-profession').textContent = getProfessionLabel(c.professionType);
+            document.getElementById('provider-city').textContent = c.city;
+
+            document.getElementById('contract-budget').textContent = '¥ ' + c.budget;
+            document.getElementById('contract-start').textContent = c.serviceStartTime;
+            document.getElementById('contract-end').textContent = c.serviceEndTime;
+
+            document.getElementById('provider-confirmed').innerHTML = c.providerConfirmed
+                ? '<span style="color:#52c41a;font-weight:500;">✓ 已确认</span>'
+                : '<span style="color:#999;">○ 待确认</span>';
+            document.getElementById('demander-confirmed').innerHTML = c.demanderConfirmed
+                ? '<span style="color:#52c41a;font-weight:500;">✓ 已确认</span>'
+                : '<span style="color:#999;">○ 待确认</span>';
+
+            document.getElementById('contract-create-time').textContent = formatTime(c.createTime);
+            document.getElementById('contract-update-time').textContent = formatTime(c.updateTime);
+
+            document.getElementById('contract-remark').textContent = c.remark || '无';
+
+            if (c.status === 'REJECTED' && c.rejectReason) {
+                document.getElementById('reject-reason-box').style.display = 'block';
+                document.getElementById('reject-reason-text').textContent = c.rejectReason;
+            } else {
+                document.getElementById('reject-reason-box').style.display = 'none';
+            }
+
+            updateActionButtons(c);
+        }
+
+        function updateActionButtons(c) {
+            const actionSection = document.getElementById('action-section');
+            const btnProvider = document.getElementById('btn-provider-sign');
+            const btnDemander = document.getElementById('btn-demander-sign');
+            const btnReject = document.getElementById('btn-reject');
+
+            if (c.status !== 'DRAFT') {
+                actionSection.style.display = 'none';
+                return;
+            }
+
+            actionSection.style.display = 'block';
+
+            btnProvider.disabled = c.providerConfirmed;
+            btnDemander.disabled = c.demanderConfirmed;
+            btnReject.disabled = false;
+
+            if (c.providerConfirmed) {
+                btnProvider.textContent = '服务商已确认';
+            }
+            if (c.demanderConfirmed) {
+                btnDemander.textContent = '需求方已确认';
+            }
+        }
+
+        function showActionError(msg) {
+            const el = document.getElementById('action-error');
+            el.textContent = msg;
+            el.style.display = 'block';
+            clearTimeout(showActionError._timer);
+            showActionError._timer = setTimeout(() => {
+                el.style.display = 'none';
+            }, 5000);
+        }
+
+        function hideActionError() {
+            document.getElementById('action-error').style.display = 'none';
+        }
+
+        async function signContract(role) {
+            hideActionError();
+            if (!currentContract) return;
+
+            const btn = role === 'provider'
+                ? document.getElementById('btn-provider-sign')
+                : document.getElementById('btn-demander-sign');
+
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '确认中...';
+
+            try {
+                const result = await request('/contracts/' + currentContract.id + '/sign?role=' + role, {
+                    method: 'POST'
+                });
+                currentContract = result;
+                renderContract(result);
+                showToast(role === 'provider' ? '服务商确认成功' : '需求方确认成功', 'success');
+
+                if (result.status === 'SIGNED') {
+                    showToast('合同已正式签约生效', 'success');
+                }
+            } catch (e) {
+                showActionError(e.message || '操作失败，请重试');
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
+        }
+
+        function openRejectModal() {
+            hideActionError();
+            const contentHtml = `
+                <div id="modal-reject-error" class="modal-error-tip" style="display:none;"></div>
+                <div class="form-group">
+                    <label class="form-label">驳回原因<span class="required">*</span></label>
+                    <textarea class="form-textarea" id="reject-reason-input" rows="4" placeholder="请填写驳回原因，便于双方了解问题"></textarea>
+                </div>
+            `;
+
+            showModal('驳回合同', contentHtml, async (m) => {
+                const reason = document.getElementById('reject-reason-input').value.trim();
+                const errEl = document.getElementById('modal-reject-error');
+
+                if (!reason) {
+                    errEl.textContent = '请填写驳回原因';
+                    errEl.style.display = 'block';
+                    return false;
+                }
+
+                const confirmBtn = m.querySelector('[data-action="confirm"]');
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = '提交中...';
+
+                try {
+                    const result = await request('/contracts/' + currentContract.id + '/reject?reason=' + encodeURIComponent(reason), {
+                        method: 'POST'
+                    });
+                    currentContract = result;
+                    renderContract(result);
+                    showToast('合同已驳回', 'success');
+                    return true;
+                } catch (e) {
+                    errEl.textContent = e.message || '驳回失败，请重试';
+                    errEl.style.display = 'block';
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = '确认驳回';
+                    return false;
+                }
+            }, '确认驳回');
+        }
+
+        (async function init() {
+            await loadContract();
+        })();
+    </script>
+</body>
+</html>
