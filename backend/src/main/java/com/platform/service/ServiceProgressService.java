@@ -2,9 +2,12 @@ package com.platform.service;
 
 import com.platform.common.BusinessException;
 import com.platform.dto.ProgressAdvanceDTO;
+import com.platform.dto.ProgressNodeAddDTO;
 import com.platform.enums.ProgressStatus;
 import com.platform.model.Contract;
 import com.platform.model.ProgressNode;
+import com.platform.model.Requirement;
+import com.platform.model.ServiceProvider;
 import com.platform.model.ServiceProgress;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,6 +15,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,6 +26,12 @@ public class ServiceProgressService {
 
     @Autowired
     private ContractService contractService;
+
+    @Autowired
+    private ProviderService providerService;
+
+    @Autowired
+    private RequirementService requirementService;
 
     private final Map<String, ServiceProgress> progressMap = new ConcurrentHashMap<>();
     private final Map<String, ProgressNode> nodeMap = new ConcurrentHashMap<>();
@@ -264,13 +274,10 @@ public class ServiceProgressService {
                 nextNode.setDescription(generateNodeDesc(nextStatus));
                 nextNode.setOperator(dto.getOperator() != null ? dto.getOperator() : "操作人");
                 if (dto.getEstimatedTime() != null && !dto.getEstimatedTime().isEmpty()) {
-                    try {
-                        nextNode.setEstimatedTime(LocalDateTime.parse(dto.getEstimatedTime(), DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-                    } catch (Exception e) {
-                        nextNode.setEstimatedTime(LocalDateTime.now().plusDays(1));
+                    LocalDateTime est = parseDateTimeSafe(dto.getEstimatedTime());
+                    if (est != null) {
+                        nextNode.setEstimatedTime(est);
                     }
-                } else {
-                    nextNode.setEstimatedTime(LocalDateTime.now().plusDays(1));
                 }
                 nextNode.setRemark("进行中");
                 nextNode.setUpdateTime(LocalDateTime.now());
@@ -347,5 +354,126 @@ public class ServiceProgressService {
         sp.setUpdateTime(LocalDateTime.now());
 
         return sp;
+    }
+
+    private LocalDateTime parseDateTimeSafe(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.trim().isEmpty()) {
+            return null;
+        }
+        String str = dateTimeStr.trim();
+        DateTimeFormatter[] formatters = {
+            DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"),
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")
+        };
+        for (DateTimeFormatter formatter : formatters) {
+            try {
+                return LocalDateTime.parse(str, formatter);
+            } catch (DateTimeParseException e) {
+                // try next format
+            }
+        }
+        throw new BusinessException("时间格式不正确，请使用 yyyy-MM-dd HH:mm:ss 格式");
+    }
+
+    public ProgressNode addCustomNode(String progressId, ProgressNodeAddDTO dto) {
+        ServiceProgress sp = getById(progressId);
+
+        if (dto.getNodeName() == null || dto.getNodeName().trim().isEmpty()) {
+            throw new BusinessException("请填写节点名称");
+        }
+
+        int maxSortOrder = sp.getNodes().stream()
+            .mapToInt(ProgressNode::getSortOrder)
+            .max()
+            .orElse(0);
+
+        ProgressNode node = new ProgressNode();
+        node.setId("PN" + String.format("%04d", nodeIdGenerator.getAndIncrement()));
+        node.setProgressId(progressId);
+        node.setNodeName(dto.getNodeName().trim());
+        node.setStatus("CUSTOM");
+        node.setDescription(dto.getDescription());
+        node.setOperator(dto.getOperator() != null ? dto.getOperator() : "操作人");
+        node.setRemark(dto.getRemark());
+        node.setSortOrder(maxSortOrder + 1);
+        node.setCreateTime(LocalDateTime.now());
+        node.setUpdateTime(LocalDateTime.now());
+
+        if (dto.getEstimatedTime() != null && !dto.getEstimatedTime().trim().isEmpty()) {
+            node.setEstimatedTime(parseDateTimeSafe(dto.getEstimatedTime()));
+        }
+
+        nodeMap.put(node.getId(), node);
+
+        List<ProgressNode> nodes = new ArrayList<>(sp.getNodes());
+        nodes.add(node);
+        sp.setNodes(nodes);
+        sp.setUpdateTime(LocalDateTime.now());
+
+        return node;
+    }
+
+    public Map<String, Object> getProgressDetail(String progressId) {
+        ServiceProgress sp = getById(progressId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("progress", sp);
+
+        Contract contract = contractService.getById(sp.getContractId());
+        if (contract != null) {
+            Map<String, Object> contractInfo = new HashMap<>();
+            contractInfo.put("id", contract.getId());
+            contractInfo.put("status", contract.getStatus());
+            contractInfo.put("budget", contract.getBudget());
+            contractInfo.put("serviceStartTime", contract.getServiceStartTime());
+            contractInfo.put("serviceEndTime", contract.getServiceEndTime());
+            contractInfo.put("remark", contract.getRemark());
+            contractInfo.put("providerConfirmed", contract.getProviderConfirmed());
+            contractInfo.put("demanderConfirmed", contract.getDemanderConfirmed());
+            result.put("contract", contractInfo);
+        }
+
+        try {
+            ServiceProvider provider = providerService.getById(sp.getProviderId());
+            if (provider != null) {
+                Map<String, Object> providerInfo = new HashMap<>();
+                providerInfo.put("id", provider.getId());
+                providerInfo.put("name", provider.getName());
+                providerInfo.put("phone", provider.getPhone());
+                providerInfo.put("verifyStatus", provider.getVerifyStatus() != null ? provider.getVerifyStatus().name() : null);
+                providerInfo.put("verifySummary", provider.getVerifyStatus() != null ? provider.getVerifyStatus().getDesc() : null);
+                providerInfo.put("professionType", provider.getProfessionType());
+                providerInfo.put("city", provider.getCity());
+                providerInfo.put("skillTags", provider.getSkillTags());
+                providerInfo.put("completeness", provider.getCompleteness());
+                result.put("provider", providerInfo);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+
+        try {
+            Requirement req = requirementService.getById(sp.getRequirementId());
+            if (req != null) {
+                Map<String, Object> reqInfo = new HashMap<>();
+                reqInfo.put("id", req.getId());
+                reqInfo.put("title", req.getTitle());
+                reqInfo.put("description", req.getDescription());
+                reqInfo.put("professionType", req.getProfessionType());
+                reqInfo.put("city", req.getCity());
+                reqInfo.put("requiredSkills", req.getRequiredSkills());
+                reqInfo.put("budget", req.getBudget());
+                reqInfo.put("contactName", req.getContactName());
+                reqInfo.put("contactPhone", req.getContactPhone());
+                reqInfo.put("status", req.getStatus());
+                result.put("requirement", reqInfo);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+
+        return result;
     }
 }

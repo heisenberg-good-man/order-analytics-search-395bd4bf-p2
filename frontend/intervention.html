@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>平台介入工作台 - 家政服务中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏠 家政服务中介平台</h1>
+            <nav class="nav">
+                <a href="index.html">认证审核</a>
+                <a href="providers.html">服务商管理</a>
+                <a href="orders.html">需求管理</a>
+                <a href="contracts.html">合同管理</a>
+                <a href="progress.html">服务进度</a>
+                <a href="intervention.html" class="active">平台介入</a>
+            </nav>
+        </header>
+
+        <div class="page-header">
+            <h2>平台介入工作台</h2>
+            <p class="subtitle">处理服务纠纷与投诉介入</p>
+        </div>
+
+        <div class="stats-section" id="intervention-stats">
+            <div class="stat-card stat-total">
+                <div class="stat-label">介入总数</div>
+                <div class="stat-value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card stat-pending">
+                <div class="stat-label">待受理</div>
+                <div class="stat-value" id="stat-pending">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">处理中</div>
+                <div class="stat-value" id="stat-processing" style="color:#1890ff;">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">待补充</div>
+                <div class="stat-value" id="stat-supplement" style="color:#fa8c16;">0</div>
+            </div>
+            <div class="stat-card stat-approved">
+                <div class="stat-label">已处理</div>
+                <div class="stat-value" id="stat-resolved">0</div>
+            </div>
+            <div class="stat-card stat-rejected">
+                <div class="stat-label">已关闭</div>
+                <div class="stat-value" id="stat-closed">0</div>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-row">
+                <div class="filter-item">
+                    <label>处理状态：</label>
+                    <select class="form-select" id="filter-status" onchange="loadList()">
+                        <option value="">全部状态</option>
+                        <option value="PENDING">待受理</option>
+                        <option value="PROCESSING">处理中</option>
+                        <option value="SUPPLEMENT">待补充</option>
+                        <option value="RESOLVED">已处理</option>
+                        <option value="CLOSED">已关闭</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>职业类型：</label>
+                    <select class="form-select" id="filter-profession" onchange="loadList()">
+                        <option value="">全部职业</option>
+                        <option value="housekeeper">保姆</option>
+                        <option value="repair">维修</option>
+                        <option value="tutor">家教</option>
+                        <option value="driver">司机</option>
+                        <option value="cleaner">保洁</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>服务城市：</label>
+                    <select class="form-select" id="filter-city" onchange="loadList()">
+                        <option value="">全部城市</option>
+                        <option value="北京">北京</option>
+                        <option value="上海">上海</option>
+                        <option value="广州">广州</option>
+                        <option value="深圳">深圳</option>
+                        <option value="成都">成都</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>问题类型：</label>
+                    <select class="form-select" id="filter-issue-type" onchange="loadList()">
+                        <option value="">全部类型</option>
+                        <option value="SERVICE_QUALITY">服务质量</option>
+                        <option value="PAYMENT_DISPUTE">费用争议</option>
+                        <option value="QUALITY_COMPLAINT">质量投诉</option>
+                        <option value="CANCEL_DISPUTE">取消纠纷</option>
+                        <option value="OTHER">其他</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <button class="btn btn-default" onclick="resetFilters()">重置筛选</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <div id="intervention-list" class="intervention-list"></div>
+            <div id="empty-state" class="empty-state" style="display:none;">
+                <div class="empty-icon">📋</div>
+                <div class="empty-text">暂无介入记录</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        async function request(url, options = {}) {
+            const res = await fetch(API_BASE + url, {
+                headers: { 'Content-Type': 'application/json', ...options.headers },
+                ...options
+            });
+            const data = await res.json();
+            if (data.code !== 200) throw new Error(data.message || '请求失败');
+            return data.data;
+        }
+
+        function getInterventionStatusInfo(status) {
+            const map = {
+                PENDING: { label: '待受理', class: 'status-pending' },
+                PROCESSING: { label: '处理中', class: 'status-processing' },
+                SUPPLEMENT: { label: '待补充', class: 'status-supplement' },
+                RESOLVED: { label: '已处理', class: 'status-resolved' },
+                CLOSED: { label: '已关闭', class: 'status-closed' }
+            };
+            return map[status] || { label: status, class: '' };
+        }
+
+        function getIssueTypeLabel(type) {
+            const map = {
+                SERVICE_QUALITY: '服务质量',
+                PAYMENT_DISPUTE: '费用争议',
+                QUALITY_COMPLAINT: '质量投诉',
+                CANCEL_DISPUTE: '取消纠纷',
+                OTHER: '其他'
+            };
+            return map[type] || type;
+        }
+
+        function getProfessionLabel(type) {
+            const map = {
+                housekeeper: '保姆',
+                repair: '维修',
+                tutor: '家教',
+                driver: '司机',
+                cleaner: '保洁'
+            };
+            return map[type] || type;
+        }
+
+        function formatDateTime(dt) {
+            if (!dt) return '-';
+            if (typeof dt === 'string') return dt;
+            return dt;
+        }
+
+        async function loadStats() {
+            try {
+                const stats = await request('/intervention/statistics');
+                document.getElementById('stat-total').textContent = stats.total || 0;
+                document.getElementById('stat-pending').textContent = stats.pending || 0;
+                document.getElementById('stat-processing').textContent = stats.processing || 0;
+                document.getElementById('stat-supplement').textContent = stats.supplement || 0;
+                document.getElementById('stat-resolved').textContent = stats.resolved || 0;
+                document.getElementById('stat-closed').textContent = stats.closed || 0;
+            } catch (e) {
+                console.error('加载统计失败', e);
+            }
+        }
+
+        async function loadList() {
+            const status = document.getElementById('filter-status').value;
+            const profession = document.getElementById('filter-profession').value;
+            const city = document.getElementById('filter-city').value;
+            const issueType = document.getElementById('filter-issue-type').value;
+
+            const params = new URLSearchParams();
+            if (status) params.set('status', status);
+            if (profession) params.set('professionType', profession);
+            if (city) params.set('city', city);
+            if (issueType) params.set('issueType', issueType);
+
+            try {
+                const list = await request('/intervention?' + params.toString());
+                renderList(list);
+            } catch (e) {
+                console.error('加载列表失败', e);
+            }
+        }
+
+        function renderList(list) {
+            const container = document.getElementById('intervention-list');
+            const empty = document.getElementById('empty-state');
+
+            if (!list || list.length === 0) {
+                container.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+            container.innerHTML = list.map(iv => {
+                const st = getInterventionStatusInfo(iv.status);
+                return `
+                    <div class="intervention-card" onclick="goToDetail('${iv.id}')">
+                        <div class="intervention-card-header">
+                            <div class="intervention-title">
+                                <span class="iv-id">${iv.id}</span>
+                                <span class="status-tag ${st.class}">${st.label}</span>
+                            </div>
+                            <div class="intervention-meta">
+                                <span>问题类型：${getIssueTypeLabel(iv.issueType)}</span>
+                                <span>职业：${getProfessionLabel(iv.professionType)}</span>
+                                <span>城市：${iv.city}</span>
+                                <span>合同金额：¥${iv.contractBudget}</span>
+                            </div>
+                        </div>
+                        <div class="intervention-card-body">
+                            <div class="iv-row">
+                                <span class="iv-label">关联需求：</span>
+                                <span class="iv-value">${iv.requirementTitle || iv.requirementId}</span>
+                            </div>
+                            <div class="iv-row">
+                                <span class="iv-label">服务商：</span>
+                                <span class="iv-value">${iv.providerName || '-'}</span>
+                            </div>
+                            <div class="iv-row">
+                                <span class="iv-label">当前节点：</span>
+                                <span class="iv-value">${iv.currentNode || '-'}</span>
+                            </div>
+                            <div class="iv-row">
+                                <span class="iv-label">发起人：</span>
+                                <span class="iv-value">${iv.initiatorName || '-'}（${iv.initiatorRole === 'DEMANDER' ? '需求方' : '服务商'}）</span>
+                            </div>
+                            <div class="iv-row iv-desc">
+                                <span class="iv-label">问题描述：</span>
+                                <span class="iv-value">${iv.complaintContent || '-'}</span>
+                            </div>
+                        </div>
+                        <div class="intervention-card-footer">
+                            <span>发起时间：${formatDateTime(iv.createTime)}</span>
+                            <span class="view-detail-link">查看详情 →</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function goToDetail(id) {
+            window.location.href = 'intervention-detail.html?id=' + id;
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-profession').value = '';
+            document.getElementById('filter-city').value = '';
+            document.getElementById('filter-issue-type').value = '';
+            loadList();
+        }
+
+        function showToast(msg, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = 'toast toast-' + type;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        loadStats();
+        loadList();
+    </script>
+</body>
+</html>

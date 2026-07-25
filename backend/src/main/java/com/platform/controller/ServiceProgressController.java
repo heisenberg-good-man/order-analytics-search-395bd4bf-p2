@@ -2,6 +2,8 @@ package com.platform.controller;
 
 import com.platform.common.Result;
 import com.platform.dto.ProgressAdvanceDTO;
+import com.platform.dto.ProgressNodeAddDTO;
+import com.platform.model.ProgressNode;
 import com.platform.model.ServiceProgress;
 import com.platform.service.ServiceProgressService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +65,20 @@ public class ServiceProgressController {
             @RequestBody ProgressAdvanceDTO dto) {
         ServiceProgress sp = progressService.advanceNode(id, dto);
         return Result.success(sp);
+    }
+
+    @GetMapping("/{id}/detail")
+    public Result<Map<String, Object>> getDetail(@PathVariable String id) {
+        Map<String, Object> detail = progressService.getProgressDetail(id);
+        return Result.success(detail);
+    }
+
+    @PostMapping("/{id}/nodes")
+    public Result<ProgressNode> addCustomNode(
+            @PathVariable String id,
+            @RequestBody ProgressNodeAddDTO dto) {
+        ProgressNode node = progressService.addCustomNode(id, dto);
+        return Result.success(node);
     }
 
     @PostMapping("/{id}/pause")

@@ -30,8 +30,15 @@
         <div class="detail-layout">
             <div class="detail-main">
                 <div class="detail-card">
-                    <div class="card-title">服务信息</div>
-                    <div id="service-info">
+                    <div class="card-title">需求信息</div>
+                    <div id="requirement-info">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="detail-card">
+                    <div class="card-title">合同信息</div>
+                    <div id="contract-info">
                         <div class="loading">加载中...</div>
                     </div>
                 </div>
@@ -39,9 +46,22 @@
                 <div class="detail-card">
                     <div class="card-title">
                         服务节点时间线
+                        <button class="btn btn-default btn-sm" style="float:right;" onclick="showAddNodeModal()">
+                            + 新增节点
+                        </button>
                         <span id="current-node-label" style="margin-left: 10px; font-size: 13px; color: #666; font-weight: normal;"></span>
                     </div>
                     <div id="timeline" class="timeline">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="detail-card" id="intervention-section" style="display:none;">
+                    <div class="card-title">
+                        平台介入
+                        <span class="badge" id="intervention-badge" style="margin-left: 8px; display:none;">1</span>
+                    </div>
+                    <div id="intervention-content">
                         <div class="loading">加载中...</div>
                     </div>
                 </div>
@@ -49,7 +69,7 @@
 
             <div class="detail-sidebar">
                 <div class="provider-summary">
-                    <div class="provider-summary-title">服务商信息</div>
+                    <div class="provider-summary-title">服务商实名摘要</div>
                     <div id="provider-summary-content">
                         <div class="loading">加载中...</div>
                     </div>
@@ -77,11 +97,27 @@
             ABNORMAL_PAUSED: { label: '异常暂停', class: 'status-red' }
         };
 
+        const INTERVENTION_STATUS_MAP = {
+            PENDING: { label: '待受理', class: 'status-pending' },
+            PROCESSING: { label: '处理中', class: 'status-processing' },
+            SUPPLEMENT: { label: '待补充', class: 'status-supplement' },
+            RESOLVED: { label: '已处理', class: 'status-resolved' },
+            CLOSED: { label: '已关闭', class: 'status-closed' }
+        };
+
+        const ISSUE_TYPE_MAP = {
+            SERVICE_QUALITY: '服务质量',
+            PAYMENT_DISPUTE: '费用争议',
+            QUALITY_COMPLAINT: '质量投诉',
+            CANCEL_DISPUTE: '取消纠纷',
+            OTHER: '其他'
+        };
+
         function getProgressStatusInfo(status) {
             return PROGRESS_STATUS_MAP[status] || { label: status, class: 'status-gray' };
         }
 
-        let currentProgress = null;
+        let currentDetail = null;
         let progressId = null;
 
         function getQueryParam(name) {
@@ -89,21 +125,134 @@
             return params.get(name);
         }
 
+        function formatDateTime(dt) {
+            if (!dt) return '-';
+            if (typeof dt === 'string') return dt;
+            return dt;
+        }
+
         async function loadProgress() {
             try {
-                currentProgress = await request('/progress/' + progressId);
-                renderProgress();
+                currentDetail = await request('/progress/' + progressId + '/detail');
+                renderRequirementInfo();
+                renderContractInfo();
+                renderProgressInfo();
                 renderTimeline();
                 renderProviderSummary();
                 renderActions();
+                loadInterventions();
             } catch (e) {
-                document.getElementById('service-info').innerHTML =
+                document.getElementById('requirement-info').innerHTML =
                     '<div class="empty">加载失败：' + e.message + '</div>';
             }
         }
 
-        function renderProgress() {
-            const p = currentProgress;
+        function renderRequirementInfo() {
+            const req = currentDetail.requirement;
+            if (!req) {
+                document.getElementById('requirement-info').innerHTML = '<div class="empty">暂无需求信息</div>';
+                return;
+            }
+            const html = `
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">需求编号</span>
+                        <span class="info-value">
+                            <a href="order-detail.html?id=${req.id}" style="color:#1890ff;">${req.id}</a>
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">需求标题</span>
+                        <span class="info-value">${req.title || '-'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">职业类型</span>
+                        <span class="info-value">${getProfessionLabel(req.professionType)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">服务城市</span>
+                        <span class="info-value">${req.city || '-'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">预算金额</span>
+                        <span class="info-value">¥${req.budget || 0}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">需求状态</span>
+                        <span class="info-value">${req.status || '-'}</span>
+                    </div>
+                </div>
+                ${req.description ? `
+                <div class="info-block">
+                    <div class="info-label">需求描述</div>
+                    <div class="info-value info-text">${req.description}</div>
+                </div>
+                ` : ''}
+                ${req.requiredSkills && req.requiredSkills.length ? `
+                <div class="info-block">
+                    <div class="info-label">所需技能</div>
+                    <div class="info-value">
+                        ${req.requiredSkills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            `;
+            document.getElementById('requirement-info').innerHTML = html;
+        }
+
+        function renderContractInfo() {
+            const contract = currentDetail.contract;
+            if (!contract) {
+                document.getElementById('contract-info').innerHTML = '<div class="empty">暂无合同信息</div>';
+                return;
+            }
+            const contractStatusMap = {
+                DRAFT: '草稿',
+                PENDING_CONFIRM: '待确认',
+                SIGNED: '已签约',
+                CANCELLED: '已取消'
+            };
+            const html = `
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">合同编号</span>
+                        <span class="info-value">
+                            <a href="contract-detail.html?id=${contract.id}" style="color:#1890ff;">${contract.id}</a>
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">合同状态</span>
+                        <span class="info-value">${contractStatusMap[contract.status] || contract.status}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">合同金额</span>
+                        <span class="info-value">¥${contract.budget || 0}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">需求方确认</span>
+                        <span class="info-value">${contract.demanderConfirmed ? '已确认' : '待确认'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">服务商确认</span>
+                        <span class="info-value">${contract.providerConfirmed ? '已确认' : '待确认'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">服务开始</span>
+                        <span class="info-value">${formatDateTime(contract.serviceStartTime)}</span>
+                    </div>
+                </div>
+                ${contract.remark ? `
+                <div class="info-block">
+                    <div class="info-label">合同备注</div>
+                    <div class="info-value info-text">${contract.remark}</div>
+                </div>
+                ` : ''}
+            `;
+            document.getElementById('contract-info').innerHTML = html;
+        }
+
+        function renderProgressInfo() {
+            const p = currentDetail.progress;
             const st = getProgressStatusInfo(p.currentStatus);
 
             const statusTag = document.getElementById('progress-status-tag');
@@ -112,48 +261,10 @@
 
             document.getElementById('current-node-label').textContent =
                 '当前：' + (p.currentNode || '-');
-
-            const html = `
-                <div class="info-grid">
-                    <div class="info-item">
-                        <span class="label">需求标题：</span>
-                        <span class="value">
-                            <a href="order-detail.html?id=${p.requirementId}" style="color:#1890ff;">${p.requirementTitle}</a>
-                        </span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">合同编号：</span>
-                        <span class="value">
-                            <a href="contract-detail.html?id=${p.contractId}" style="color:#1890ff;">${p.contractId}</a>
-                        </span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">职业类型：</span>
-                        <span class="value">${getProfessionLabel(p.professionType)}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">服务城市：</span>
-                        <span class="value">${p.city}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">服务预算：</span>
-                        <span class="value">¥${p.budget}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">创建时间：</span>
-                        <span class="value">${formatTime(p.createTime)}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">更新时间：</span>
-                        <span class="value">${formatTime(p.updateTime)}</span>
-                    </div>
-                </div>
-            `;
-            document.getElementById('service-info').innerHTML = html;
         }
 
         function renderTimeline() {
-            const p = currentProgress;
+            const p = currentDetail.progress;
             const nodes = (p.nodes || []).sort((a, b) => a.sortOrder - b.sortOrder);
 
             if (nodes.length === 0) {
@@ -163,14 +274,20 @@
 
             const html = nodes.map((n, i) => {
                 const st = getProgressStatusInfo(n.status);
-                const isCurrent = n.status === p.currentStatus && p.currentStatus !== 'ABNORMAL_PAUSED';
+                const isCustom = n.status === 'CUSTOM';
+                const isCurrent = !isCustom && n.status === p.currentStatus && p.currentStatus !== 'ABNORMAL_PAUSED';
                 const isDone = n.actualTime != null;
                 const isPaused = n.status === 'ABNORMAL_PAUSED';
 
                 let dotClass = 'timeline-dot-pending';
                 if (isPaused) dotClass = 'timeline-dot-error';
                 else if (isCurrent) dotClass = 'timeline-dot-current';
-                else if (isDone) dotClass = 'timeline-dot-done';
+                else if (isDone || isCustom) dotClass = 'timeline-dot-done';
+
+                let statusLabel = st.label;
+                if (isCustom) {
+                    statusLabel = '自定义节点';
+                }
 
                 return `
                     <div class="timeline-item ${isCurrent ? 'timeline-item-current' : ''}">
@@ -178,14 +295,16 @@
                         <div class="timeline-content">
                             <div class="timeline-header">
                                 <span class="timeline-title">${n.nodeName}</span>
+                                ${isCustom ? '<span class="status-tag status-purple" style="font-size:11px; padding:1px 6px;">自定义</span>' : `
                                 <span class="status-tag ${st.class}" style="font-size:11px; padding:1px 6px;">
-                                    ${st.label}
+                                    ${statusLabel}
                                 </span>
+                                `}
                             </div>
-                            <div class="timeline-desc">${n.description || '-'}</div>
+                            ${n.description ? `<div class="timeline-desc">${n.description}</div>` : ''}
                             <div class="timeline-meta">
-                                ${n.estimatedTime ? `<span>预计：${formatTime(n.estimatedTime)}</span>` : ''}
-                                ${n.actualTime ? `<span>实际：${formatTime(n.actualTime)}</span>` : ''}
+                                ${n.estimatedTime ? `<span>预计：${formatDateTime(n.estimatedTime)}</span>` : ''}
+                                ${n.actualTime ? `<span>实际：${formatDateTime(n.actualTime)}</span>` : ''}
                                 ${n.operator ? `<span>操作人：${n.operator}</span>` : ''}
                             </div>
                             ${n.remark ? `<div class="timeline-remark">备注：${n.remark}</div>` : ''}
@@ -198,19 +317,46 @@
         }
 
         function renderProviderSummary() {
-            const p = currentProgress;
+            const provider = currentDetail.provider;
+            const p = currentDetail.progress;
+            if (!provider) {
+                document.getElementById('provider-summary-content').innerHTML = '<div class="empty">暂无服务商信息</div>';
+                return;
+            }
+
+            const verifyMap = {
+                PENDING: { label: '待认证', class: 'status-yellow' },
+                APPROVED: { label: '已认证', class: 'status-green' },
+                REJECTED: { label: '未通过', class: 'status-red' }
+            };
+            const vInfo = verifyMap[provider.verifyStatus] || { label: provider.verifyStatus, class: '' };
+
             const html = `
-                <div class="summary-grid">
-                    <div><span class="label">姓名：</span><span class="value">${p.providerName}</span></div>
-                    <div><span class="label">职业：</span><span class="value">${getProfessionLabel(p.professionType)}</span></div>
-                    <div><span class="label">城市：</span><span class="value">${p.city}</span></div>
+                <div class="provider-avatar">
+                    ${provider.name ? provider.name.charAt(0) : '?'}
                 </div>
+                <div class="provider-name">${provider.name || '-'}</div>
+                <div class="provider-verify">
+                    <span class="status-tag ${vInfo.class}" style="font-size: 11px;">${vInfo.label}</span>
+                    <span style="font-size:12px; color:#999; margin-left:6px;">实名${provider.verifyStatus === 'APPROVED' ? '已验证' : '未验证'}</span>
+                </div>
+                <div class="summary-grid">
+                    <div><span class="label">手机：</span><span class="value">${provider.phone || '-'}</span></div>
+                    <div><span class="label">职业：</span><span class="value">${getProfessionLabel(provider.professionType) || getProfessionLabel(p.professionType)}</span></div>
+                    <div><span class="label">城市：</span><span class="value">${provider.city || p.city || '-'}</span></div>
+                    <div><span class="label">完整度：</span><span class="value">${provider.completeness || 0}%</span></div>
+                </div>
+                ${provider.skillTags && provider.skillTags.length ? `
+                <div class="provider-skills">
+                    ${provider.skillTags.slice(0, 5).map(s => `<span class="skill-tag-sm">${s}</span>`).join('')}
+                </div>
+                ` : ''}
             `;
             document.getElementById('provider-summary-content').innerHTML = html;
         }
 
         function renderActions() {
-            const p = currentProgress;
+            const p = currentDetail.progress;
             const status = p.currentStatus;
             let html = '';
 
@@ -219,10 +365,16 @@
                     <div style="text-align:center; padding: 20px; color: #52c41a;">
                         ✅ 服务已圆满完成
                     </div>
+                    <button class="btn btn-default btn-block" style="margin-top: 10px;" onclick="showInterventionModal()">
+                        📞 申请平台介入
+                    </button>
                 `;
             } else if (status === 'ABNORMAL_PAUSED') {
                 html = `
                     <button class="btn btn-primary btn-block" onclick="showResumeModal()">▶ 恢复服务</button>
+                    <button class="btn btn-warning btn-block" style="margin-top: 8px;" onclick="showInterventionModal()">
+                        ⚖ 申请平台介入
+                    </button>
                 `;
             } else {
                 const nextNodeMap = {
@@ -236,13 +388,160 @@
                     <button class="btn btn-primary btn-block" onclick="showAdvanceModal()">
                         ⏭ ${nextBtnText}
                     </button>
-                    <button class="btn btn-danger btn-block" onclick="showPauseModal()" style="margin-top: 8px;">
+                    <button class="btn btn-default btn-block" style="margin-top: 8px;" onclick="showAddNodeModal()">
+                        + 新增服务节点
+                    </button>
+                    <button class="btn btn-danger btn-block" style="margin-top: 8px;" onclick="showPauseModal()">
                         ⚠ 异常暂停
+                    </button>
+                    <button class="btn btn-warning btn-block" style="margin-top: 8px;" onclick="showInterventionModal()">
+                        ⚖ 申请平台介入
                     </button>
                 `;
             }
 
             document.getElementById('action-area').innerHTML = html;
+        }
+
+        async function loadInterventions() {
+            const p = currentDetail.progress;
+            try {
+                const list = await request('/intervention/by-progress/' + p.id);
+                renderInterventions(list);
+            } catch (e) {
+                document.getElementById('intervention-section').style.display = 'none';
+            }
+        }
+
+        function renderInterventions(list) {
+            const section = document.getElementById('intervention-section');
+            const content = document.getElementById('intervention-content');
+            const badge = document.getElementById('intervention-badge');
+
+            if (!list || list.length === 0) {
+                section.style.display = 'block';
+                content.innerHTML = `
+                    <div style="padding: 16px; background: #fff7e6; border: 1px solid #ffd591; border-radius: 6px; text-align: center;">
+                        <div style="color: #d46b08; margin-bottom: 8px;">当前无介入记录</div>
+                        <button class="btn btn-warning btn-sm" onclick="showInterventionModal()">
+                            ⚖ 申请平台介入
+                        </button>
+                    </div>
+                `;
+                badge.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            badge.style.display = 'inline-block';
+            badge.textContent = list.length;
+
+            content.innerHTML = list.map(iv => {
+                const st = INTERVENTION_STATUS_MAP[iv.status] || { label: iv.status, class: '' };
+                return `
+                    <div class="intervention-item" onclick="goToInterventionDetail('${iv.id}')">
+                        <div class="intervention-item-header">
+                            <span class="iv-id">${iv.id}</span>
+                            <span class="status-tag ${st.class}">${st.label}</span>
+                        </div>
+                        <div class="intervention-item-body">
+                            <div>问题类型：${ISSUE_TYPE_MAP[iv.issueType] || iv.issueType}</div>
+                            <div class="iv-desc">${iv.complaintContent || '-'}</div>
+                        </div>
+                        <div class="intervention-item-footer">
+                            <span>${formatDateTime(iv.createTime)}</span>
+                            <span class="link-text">查看详情 →</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function goToInterventionDetail(id) {
+            window.location.href = 'intervention-detail.html?id=' + id;
+        }
+
+        function showAddNodeModal() {
+            const content = `
+                <div class="form-group">
+                    <label>节点名称 <span style="color:#ff4d4f;">*</span></label>
+                    <select class="form-select" id="add-node-type" onchange="onNodeTypeChange()">
+                        <option value="">请选择或自定义</option>
+                        <option value="临时上门">临时上门</option>
+                        <option value="补料">补料</option>
+                        <option value="复检">复检</option>
+                        <option value="返工">返工</option>
+                        <option value="custom">自定义...</option>
+                    </select>
+                </div>
+                <div class="form-group" id="custom-name-group" style="display:none;">
+                    <label>自定义节点名称 <span style="color:#ff4d4f;">*</span></label>
+                    <input type="text" class="form-input" id="add-node-name" placeholder="请输入节点名称">
+                </div>
+                <div class="form-group">
+                    <label>节点说明</label>
+                    <textarea class="form-input" id="add-node-desc" rows="3" placeholder="请填写节点说明"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>预计完成时间</label>
+                    <input type="datetime-local" class="form-input" id="add-node-estimated">
+                </div>
+                <div class="form-group">
+                    <label>操作人</label>
+                    <input type="text" class="form-input" id="add-node-operator" value="管理员">
+                </div>
+                <div class="form-group">
+                    <label>备注</label>
+                    <input type="text" class="form-input" id="add-node-remark" placeholder="可选">
+                </div>
+                <div class="modal-error-tip" id="add-node-error"></div>
+            `;
+            showModal('新增服务节点', content, async (modal) => {
+                const typeSelect = document.getElementById('add-node-type');
+                const customName = document.getElementById('add-node-name');
+                const isCustom = typeSelect.value === 'custom';
+                const nodeName = isCustom ? customName.value.trim() : typeSelect.value;
+                const desc = document.getElementById('add-node-desc').value.trim();
+                const estimated = document.getElementById('add-node-estimated').value;
+                const operator = document.getElementById('add-node-operator').value.trim();
+                const remark = document.getElementById('add-node-remark').value.trim();
+                const errorEl = modal.querySelector('#add-node-error');
+
+                if (!nodeName) {
+                    errorEl.textContent = '请选择或填写节点名称';
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+
+                try {
+                    const body = {
+                        nodeName: nodeName,
+                        description: desc,
+                        operator: operator || '管理员',
+                        remark: remark
+                    };
+                    if (estimated) {
+                        body.estimatedTime = estimated.replace('T', ' ') + ':00';
+                    }
+                    await request('/progress/' + progressId + '/nodes', {
+                        method: 'POST',
+                        body: JSON.stringify(body)
+                    });
+                    showToast('节点新增成功', 'success');
+                    await loadProgress();
+                    return true;
+                } catch (e) {
+                    errorEl.textContent = e.message;
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+            }, '确认新增');
+        }
+
+        function onNodeTypeChange() {
+            const val = document.getElementById('add-node-type').value;
+            document.getElementById('custom-name-group').style.display =
+                val === 'custom' ? 'block' : 'none';
         }
 
         function showAdvanceModal() {
@@ -256,16 +555,21 @@
                     <label>下一节点预计完成时间</label>
                     <input type="datetime-local" class="form-input" id="advance-estimated">
                 </div>
+                <div class="form-group">
+                    <label>操作人</label>
+                    <input type="text" class="form-input" id="advance-operator" value="管理员">
+                </div>
                 <div class="modal-error-tip" id="advance-error"></div>
             `;
             showModal('推进服务节点', content, async (modal) => {
                 const remark = document.getElementById('advance-remark').value.trim();
                 const estimated = document.getElementById('advance-estimated').value;
+                const operator = document.getElementById('advance-operator').value.trim();
                 const errorEl = modal.querySelector('#advance-error');
 
                 try {
                     const body = {
-                        operator: '管理员',
+                        operator: operator || '管理员',
                         remark: remark
                     };
                     if (estimated) {
@@ -293,10 +597,15 @@
                     <label>暂停原因 <span style="color:#ff4d4f;">*</span></label>
                     <textarea class="form-input" id="pause-reason" rows="3" placeholder="请填写异常暂停原因"></textarea>
                 </div>
+                <div class="form-group">
+                    <label>操作人</label>
+                    <input type="text" class="form-input" id="pause-operator" value="管理员">
+                </div>
                 <div class="modal-error-tip" id="pause-error"></div>
             `;
             showModal('异常暂停', content, async (modal) => {
                 const reason = document.getElementById('pause-reason').value.trim();
+                const operator = document.getElementById('pause-operator').value.trim();
                 const errorEl = modal.querySelector('#pause-error');
 
                 if (!reason) {
@@ -308,7 +617,7 @@
                 try {
                     await request('/progress/' + progressId + '/pause', {
                         method: 'POST',
-                        body: JSON.stringify({ reason: reason, operator: '管理员' })
+                        body: JSON.stringify({ reason: reason, operator: operator || '管理员' })
                     });
                     showToast('已暂停服务', 'success');
                     await loadProgress();
@@ -325,17 +634,19 @@
             hideActionError();
             const content = `
                 <div class="form-group">
-                    <label>确认恢复服务？</label>
-                    <div style="font-size: 13px; color: #666; margin-top: 5px;">
-                        恢复后将从当前待完成的节点继续推进
-                    </div>
+                    <label>操作人</label>
+                    <input type="text" class="form-input" id="resume-operator" value="管理员">
+                </div>
+                <div style="font-size: 13px; color: #666; margin-top: 5px;">
+                    恢复后将从当前待完成的节点继续推进
                 </div>
             `;
             showModal('恢复服务', content, async () => {
+                const operator = document.getElementById('resume-operator').value.trim();
                 try {
                     await request('/progress/' + progressId + '/resume', {
                         method: 'POST',
-                        body: JSON.stringify({ operator: '管理员' })
+                        body: JSON.stringify({ operator: operator || '管理员' })
                     });
                     showToast('服务已恢复', 'success');
                     await loadProgress();
@@ -345,6 +656,84 @@
                     return false;
                 }
             }, '确认恢复');
+        }
+
+        function showInterventionModal() {
+            const p = currentDetail.progress;
+            const content = `
+                <div class="form-group">
+                    <label>问题类型 <span style="color:#ff4d4f;">*</span></label>
+                    <select class="form-select" id="iv-issue-type">
+                        <option value="">请选择问题类型</option>
+                        <option value="SERVICE_QUALITY">服务质量</option>
+                        <option value="PAYMENT_DISPUTE">费用争议</option>
+                        <option value="QUALITY_COMPLAINT">质量投诉</option>
+                        <option value="CANCEL_DISPUTE">取消纠纷</option>
+                        <option value="OTHER">其他</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>问题描述 <span style="color:#ff4d4f;">*</span></label>
+                    <textarea class="form-input" id="iv-complaint" rows="4" placeholder="请详细描述遇到的问题"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>诉求说明</label>
+                    <textarea class="form-input" id="iv-demand" rows="2" placeholder="您希望平台如何处理"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>发起角色</label>
+                    <select class="form-select" id="iv-role">
+                        <option value="DEMANDER">需求方</option>
+                        <option value="PROVIDER">服务商</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>发起人姓名</label>
+                    <input type="text" class="form-input" id="iv-name" value="用户">
+                </div>
+                <div class="modal-error-tip" id="iv-error"></div>
+            `;
+            showModal('申请平台介入', content, async (modal) => {
+                const issueType = document.getElementById('iv-issue-type').value;
+                const complaint = document.getElementById('iv-complaint').value.trim();
+                const demand = document.getElementById('iv-demand').value.trim();
+                const role = document.getElementById('iv-role').value;
+                const name = document.getElementById('iv-name').value.trim();
+                const errorEl = modal.querySelector('#iv-error');
+
+                if (!issueType) {
+                    errorEl.textContent = '请选择问题类型';
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+                if (!complaint) {
+                    errorEl.textContent = '请填写问题描述';
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+
+                try {
+                    await request('/intervention', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            requirementId: p.requirementId,
+                            progressId: p.id,
+                            initiatorRole: role,
+                            initiatorName: name,
+                            issueType: issueType,
+                            complaintContent: complaint,
+                            demandDescription: demand
+                        })
+                    });
+                    showToast('介入申请已提交', 'success');
+                    await loadProgress();
+                    return true;
+                } catch (e) {
+                    errorEl.textContent = e.message;
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+            }, '提交申请');
         }
 
         function showActionError(msg) {
@@ -362,7 +751,7 @@
         async function init() {
             progressId = getQueryParam('id');
             if (!progressId) {
-                document.getElementById('service-info').innerHTML =
+                document.getElementById('requirement-info').innerHTML =
                     '<div class="empty">缺少进度ID参数</div>';
                 return;
             }
