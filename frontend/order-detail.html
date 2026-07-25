@@ -88,6 +88,14 @@
 
                 <div class="recommend-filters">
                     <div class="filter-item">
+                        <label>签约状态：</label>
+                        <select id="filter-signable" onchange="renderRecommendList()">
+                            <option value="">全部</option>
+                            <option value="signable">仅可签约</option>
+                            <option value="unsignable">仅不可签约</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
                         <label>技能匹配：</label>
                         <select id="filter-skill" onchange="renderRecommendList()">
                             <option value="">全部</option>
@@ -96,7 +104,7 @@
                         </select>
                     </div>
                     <div class="filter-item" style="margin-left:auto;color:#666;font-size:12px;">
-                        准入：已认证 + 职业匹配 + 同城 + 技能匹配
+                        可签约条件：已认证 + 职业匹配 + 同城 + 技能匹配
                     </div>
                 </div>
 
@@ -125,6 +133,7 @@
         const REQ_STATUS_MAP = {
             OPEN: { label: '进行中', class: 'status-tag status-blue' },
             MATCHED: { label: '已匹配', class: 'status-tag status-green' },
+            SIGNED: { label: '已签约', class: 'status-tag status-green' },
             CLOSED: { label: '已关闭', class: 'status-tag status-gray' }
         };
 
@@ -207,20 +216,28 @@
 
         function renderRecommendStats(stats) {
             const html = `
-                <div class="stat-item">同城同职业服务商：<span class="stat-num">${stats.totalInCityProfession}</span> 人</div>
+                <div class="stat-item">服务商总数：<span class="stat-num">${stats.total}</span> 人</div>
+                <div class="stat-item">可签约：<span class="stat-num" style="color:#52c41a;">${stats.signable}</span> 人</div>
+                <div class="stat-item">不可签约：<span class="stat-num" style="color:#ff4d4f;">${stats.unSignable}</span> 人</div>
                 <div class="stat-item">已认证：<span class="stat-num" style="color:#52c41a;">${stats.approved}</span> 人</div>
                 <div class="stat-item">待审核：<span class="stat-num" style="color:#fa8c16;">${stats.pending}</span> 人</div>
                 <div class="stat-item">已驳回：<span class="stat-num" style="color:#ff4d4f;">${stats.rejected}</span> 人</div>
                 <div class="stat-item">未提交：<span class="stat-num" style="color:#999;">${stats.notSubmitted}</span> 人</div>
-                <div class="stat-item">技能匹配(已认证)：<span class="stat-num" style="color:#722ed1;">${stats.skillMatched}</span> 人</div>
             `;
             document.getElementById('recommend-stats').innerHTML = html;
         }
 
         function renderRecommendList() {
+            const signableFilter = document.getElementById('filter-signable').value;
             const skillFilter = document.getElementById('filter-skill').value;
 
             let filtered = [...recommendResults];
+
+            if (signableFilter === 'signable') {
+                filtered = filtered.filter(r => r.signable);
+            } else if (signableFilter === 'unsignable') {
+                filtered = filtered.filter(r => !r.signable);
+            }
 
             if (skillFilter === 'matched') {
                 filtered = filtered.filter(r => r.matchedSkills && r.matchedSkills.length > 0);
@@ -233,54 +250,87 @@
 
             const listEl = document.getElementById('recommend-list');
             if (filtered.length === 0) {
-                let reason = '暂无已认证且符合条件的服务商';
                 listEl.innerHTML = `
                     <div class="recommend-empty">
-                        暂无符合条件的推荐服务商
-                        <div class="empty-reason">${reason}</div>
-                        <div class="empty-reason" style="margin-top:4px;">准入条件：已认证 + 职业匹配 + 同城 + 技能匹配</div>
+                        暂无符合筛选条件的服务商
+                        <div class="empty-reason">可尝试调整筛选条件</div>
                     </div>
                 `;
                 return;
             }
 
-            listEl.innerHTML = filtered.map((r, idx) => {
-                const p = r.provider;
-                const isSelected = selectedProviderId === p.id;
-                const st = getStatusInfo(p.verifyStatus);
+            const signableList = filtered.filter(r => r.signable);
+            const unSignableList = filtered.filter(r => !r.signable);
 
-                const matchedSkillsHtml = (r.matchedSkills || []).map(s =>
-                    `<span class="skill-tag skill-tag-matched">${s}</span>`
-                ).join('');
+            let html = '';
 
-                const missingSkillsHtml = (r.missingSkills || []).map(s =>
-                    `<span class="skill-tag skill-tag-missing">${s}</span>`
-                ).join('');
+            if (signableList.length > 0) {
+                html += `<div class="recommend-group"><div class="recommend-group-title">✓ 可签约服务商 (${signableList.length})</div>`;
+                html += signableList.map((r, idx) => renderProviderCard(r, true)).join('');
+                html += `</div>`;
+            }
 
-                return `
-                    <div class="provider-card ${isSelected ? 'selected' : ''}" onclick="selectProvider('${p.id}')">
-                        <div class="provider-card-header">
-                            <div>
-                                <div class="provider-card-name">${p.name} <span class="${st.class}" style="font-size:12px;padding:2px 8px;">${st.label}</span></div>
-                                <div class="provider-card-sub">${p.id} · ${getProfessionLabel(p.professionType)} · ${p.city}</div>
+            if (unSignableList.length > 0) {
+                html += `<div class="recommend-group"><div class="recommend-group-title">✕ 不可签约服务商 (${unSignableList.length})</div>`;
+                html += unSignableList.map((r, idx) => renderProviderCard(r, false)).join('');
+                html += `</div>`;
+            }
+
+            listEl.innerHTML = html;
+        }
+
+        function renderProviderCard(r, isSignable) {
+            const p = r.provider;
+            const isSelected = selectedProviderId === p.id;
+            const st = getStatusInfo(p.verifyStatus);
+
+            const matchedSkillsHtml = (r.matchedSkills || []).map(s =>
+                `<span class="skill-tag skill-tag-matched">${s}</span>`
+            ).join('');
+
+            const missingSkillsHtml = (r.missingSkills || []).map(s =>
+                `<span class="skill-tag skill-tag-missing">${s}</span>`
+            ).join('');
+
+            const unSignableReasonsHtml = (r.unSignableReasons || []).map(reason =>
+                `<span class="unsignable-reason-tag">${reason}</span>`
+            ).join('');
+
+            const cardClass = isSignable ? 'provider-card signable' : 'provider-card unsignable';
+            const selectBtn = isSignable
+                ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); selectProvider('${p.id}')">选择签约</button>`
+                : `<button class="btn btn-sm" disabled>不可签约</button>`;
+
+            return `
+                <div class="${cardClass} ${isSelected ? 'selected' : ''}" onclick="${isSignable ? `selectProvider('${p.id}')` : ''}">
+                    <div class="provider-card-header">
+                        <div>
+                            <div class="provider-card-name">
+                                ${p.name}
+                                <span class="${st.class}" style="font-size:12px;padding:2px 8px;">${st.label}</span>
+                                ${isSignable ? '<span class="signable-badge">可签约</span>' : '<span class="unsignable-badge">不可签约</span>'}
                             </div>
-                            <div style="text-align:right;">
-                                <div class="match-score">${r.matchScore}</div>
-                                <div class="match-score-label">匹配度</div>
-                            </div>
+                            <div class="provider-card-sub">${p.id} · ${getProfessionLabel(p.professionType)} · ${p.city}</div>
                         </div>
-                        <div class="match-reason">✓ ${r.matchReason}</div>
-                        <div class="provider-card-skills">
-                            ${matchedSkillsHtml}
-                            ${missingSkillsHtml}
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#666;">
-                            <span>资料完整度：${p.completeness}%</span>
-                            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); viewProvider('${p.id}')">查看详情</button>
+                        <div style="text-align:right;">
+                            <div class="match-score">${isSignable ? r.matchScore : '-'}</div>
+                            <div class="match-score-label">匹配度</div>
                         </div>
                     </div>
-                `;
-            }).join('');
+                    ${isSignable ? `<div class="match-reason">✓ ${r.matchReason}</div>` : `<div class="unsignable-reasons">不可签约原因：${unSignableReasonsHtml}</div>`}
+                    <div class="provider-card-skills">
+                        ${matchedSkillsHtml}
+                        ${missingSkillsHtml}
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#666;">
+                        <span>资料完整度：${p.completeness}%</span>
+                        <div style="display:flex;gap:6px;">
+                            <button class="btn btn-sm" onclick="event.stopPropagation(); viewProvider('${p.id}')">查看详情</button>
+                            ${selectBtn}
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         function selectProvider(providerId) {
@@ -362,10 +412,9 @@
                 return;
             }
 
-            if (r.provider.verifyStatus !== 'APPROVED') {
+            if (!r.signable) {
                 btn.disabled = true;
-                const st = getStatusInfo(r.provider.verifyStatus);
-                hint.textContent = '服务商当前为' + st.label + '状态，不能生成合同';
+                hint.textContent = '该服务商不可签约：' + (r.unSignableReasons || []).join('、');
                 return;
             }
 

@@ -33,17 +33,17 @@ public class ContractService {
     public void initMockData() {
         Contract c1 = new Contract();
         c1.setId("CT" + String.format("%04d", idGenerator.getAndIncrement()));
-        c1.setRequirementId("REQ0005");
-        c1.setRequirementTitle("家庭厨师做三餐");
+        c1.setRequirementId("REQ0006");
+        c1.setRequirementTitle("接送孩子上下学司机");
         c1.setProviderId("SP0006");
         c1.setProviderName("孙女士");
         c1.setProfessionType("DRIVER");
         c1.setCity("成都");
         c1.setSkillTags(Arrays.asList("C1驾照", "长途驾驶", "商务接待"));
-        c1.setBudget(new BigDecimal("5000"));
-        c1.setServiceStartTime("2026-08-01");
-        c1.setServiceEndTime("2026-08-31");
-        c1.setRemark("每月5000元，做三餐");
+        c1.setBudget(new BigDecimal("8000"));
+        c1.setServiceStartTime("2026-07-20");
+        c1.setServiceEndTime("2026-07-31");
+        c1.setRemark("每月8000元，接送孩子上下学");
         c1.setProviderVerifyStatus("APPROVED");
         c1.setProviderVerifySummary("已认证，资料齐全");
         c1.setStatus("SIGNED");
@@ -140,6 +140,14 @@ public class ContractService {
         if ("SIGNED".equals(req.getStatus())) {
             throw new BusinessException("需求已签约，不能重复生成合同");
         }
+        if ("MATCHED".equals(req.getStatus())) {
+            long signedCount = contractMap.values().stream()
+                .filter(c -> c.getRequirementId().equals(req.getId()) && "SIGNED".equals(c.getStatus()))
+                .count();
+            if (signedCount > 0) {
+                throw new BusinessException("该需求已有已签约合同，不能重复生成");
+            }
+        }
         if (!req.getProfessionType().equals(provider.getProfessionType())) {
             throw new BusinessException("服务商职业类型与需求不匹配");
         }
@@ -152,6 +160,13 @@ public class ContractService {
             .count();
         if (existingDraftCount > 0) {
             throw new BusinessException("该需求已有待确认的合同草案，请先处理现有合同");
+        }
+
+        long existingSignedCount = contractMap.values().stream()
+            .filter(c -> c.getRequirementId().equals(req.getId()) && "SIGNED".equals(c.getStatus()))
+            .count();
+        if (existingSignedCount > 0) {
+            throw new BusinessException("该需求已有已签约合同，不能重复生成");
         }
 
         String id = "CT" + String.format("%04d", idGenerator.getAndIncrement());
@@ -199,8 +214,9 @@ public class ContractService {
             c.setStatus("SIGNED");
             Requirement req = requirementService.getById(c.getRequirementId());
             if (!"SIGNED".equals(req.getStatus())) {
-                req.setStatus("MATCHED");
+                req.setStatus("SIGNED");
                 req.setSelectedProviderId(c.getProviderId());
+                req.setUpdateTime(LocalDateTime.now());
             }
         }
 

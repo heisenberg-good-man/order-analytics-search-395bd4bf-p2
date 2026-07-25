@@ -12,4 +12,6 @@ public class RecommendResult {
     private List<String> matchedSkills;
     private List<String> missingSkills;
     private String matchReason;
+    private boolean signable;
+    private List<String> unSignableReasons;
 }

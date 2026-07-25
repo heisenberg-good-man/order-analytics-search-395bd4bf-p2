@@ -42,6 +42,7 @@
                         <option value="">全部状态</option>
                         <option value="OPEN">进行中</option>
                         <option value="MATCHED">已匹配</option>
+                        <option value="SIGNED">已签约</option>
                         <option value="CLOSED">已关闭</option>
                     </select>
                 </div>
@@ -89,6 +90,7 @@
         const REQ_STATUS_MAP = {
             OPEN: { label: '进行中', class: 'status-tag status-blue' },
             MATCHED: { label: '已匹配', class: 'status-tag status-green' },
+            SIGNED: { label: '已签约', class: 'status-tag status-green' },
             CLOSED: { label: '已关闭', class: 'status-tag status-gray' }
         };
 
@@ -136,6 +138,10 @@
                         <div class="stat-card stat-approved">
                             <div class="stat-label">已匹配</div>
                             <div class="stat-value">${stats.matched}</div>
+                        </div>
+                        <div class="stat-card stat-approved">
+                            <div class="stat-label">已签约</div>
+                            <div class="stat-value">${stats.signed || 0}</div>
                         </div>
                         <div class="stat-card stat-rejected">
                             <div class="stat-label">已关闭</div>
