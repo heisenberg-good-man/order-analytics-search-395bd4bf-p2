@@ -43,7 +43,7 @@ public class ProviderService {
             {"语文辅导", "数学辅导", "英语辅导"}
         };
         VerifyStatus[] statuses = {
-            VerifyStatus.PENDING,
+            VerifyStatus.APPROVED,
             VerifyStatus.APPROVED,
             VerifyStatus.PENDING,
             VerifyStatus.REJECTED,
