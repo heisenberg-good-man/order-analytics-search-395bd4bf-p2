@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>需求详情 - 中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <div class="logo">中</div>
+            <span>社区服务中介平台</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">服务商管理</a>
+            <a href="orders.html" class="active">需求管理</a>
+            <a href="form.html">入驻资料</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <div class="breadcrumb">
+            <a href="orders.html">需求管理</a>
+            <span class="sep">/</span>
+            <span>需求详情</span>
+        </div>
+
+        <div id="req-container" style="display:none;">
+            <div class="card">
+                <div class="card-title">
+                    <span id="req-title">-</span>
+                    <span id="req-status" class="status-tag">-</span>
+                </div>
+                <ul class="info-list">
+                    <li><span class="label">需求编号</span><span class="value" id="req-id">-</span></li>
+                    <li><span class="label">服务类型</span><span class="value" id="req-profession">-</span></li>
+                    <li><span class="label">服务城市</span><span class="value" id="req-city">-</span></li>
+                    <li><span class="label">所需技能</span><span class="value" id="req-skills">-</span></li>
+                    <li><span class="label">联系人</span><span class="value" id="req-contact">-</span></li>
+                    <li><span class="label">联系电话</span><span class="value" id="req-phone">-</span></li>
+                    <li><span class="label">需求描述</span><span class="value" id="req-desc">-</span></li>
+                    <li><span class="label">发布时间</span><span class="value" id="req-time">-</span></li>
+                </ul>
+            </div>
+
+            <div id="selected-summary" class="provider-summary" style="display:none;">
+                <div class="provider-summary-title">✓ 已选定服务商</div>
+                <div class="summary-grid">
+                    <div><span class="label">姓名：</span><span class="value" id="sel-name">-</span></div>
+                    <div><span class="label">手机号：</span><span class="value" id="sel-phone">-</span></div>
+                    <div><span class="label">职业：</span><span class="value" id="sel-profession">-</span></div>
+                    <div><span class="label">城市：</span><span class="value" id="sel-city">-</span></div>
+                    <div><span class="label">认证状态：</span><span class="value" id="sel-status">-</span></div>
+                    <div><span class="label">资料完整度：</span><span class="value" id="sel-complete">-</span></div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <span class="label" style="color:#666;font-size:13px;">技能标签：</span>
+                    <span id="sel-skills" style="font-size:13px;"></span>
+                </div>
+            </div>
+
+            <div class="card recommend-section">
+                <div class="recommend-header">
+                    <div style="font-size:16px;font-weight:600;">推荐服务商</div>
+                    <button class="btn btn-sm" onclick="refreshRecommend()">🔄 刷新推荐</button>
+                </div>
+
+                <div id="recommend-stats" class="recommend-stats-bar">
+                    加载中...
+                </div>
+
+                <div class="recommend-filters">
+                    <div class="filter-item">
+                        <label>技能匹配：</label>
+                        <select id="filter-skill" onchange="renderRecommendList()">
+                            <option value="">全部</option>
+                            <option value="matched">仅技能匹配</option>
+                            <option value="allMatched">技能全匹配</option>
+                        </select>
+                    </div>
+                    <div class="filter-item" style="margin-left:auto;color:#666;font-size:12px;">
+                        准入：已认证 + 职业匹配 + 同城 + 技能匹配
+                    </div>
+                </div>
+
+                <div id="recommend-list">
+                    <div class="empty">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-container" class="card" style="display:none;text-align:center;">
+            <div id="error-msg" style="color:#ff4d4f;padding:40px;">加载失败</div>
+        </div>
+    </main>
+
+    <script src="js/common.js?v=2"></script>
+    <script>
+        let currentReq = null;
+        let recommendResults = [];
+        let selectedProviderId = null;
+
+        function getReqId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+
+        const REQ_STATUS_MAP = {
+            OPEN: { label: '进行中', class: 'status-tag status-blue' },
+            MATCHED: { label: '已匹配', class: 'status-tag status-green' },
+            CLOSED: { label: '已关闭', class: 'status-tag status-gray' }
+        };
+
+        function getReqStatusInfo(status) {
+            return REQ_STATUS_MAP[status] || { label: status, class: 'status-tag status-gray' };
+        }
+
+        async function loadRequirement() {
+            const id = getReqId();
+            if (!id) {
+                showError('缺少需求ID');
+                return;
+            }
+            try {
+                const req = await request('/requirements/' + id);
+                currentReq = req;
+                renderRequirement(req);
+                await loadRecommend();
+            } catch (e) {
+                showError(e.message);
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('req-container').style.display = 'none';
+            document.getElementById('error-container').style.display = 'block';
+            document.getElementById('error-msg').textContent = msg;
+        }
+
+        function renderRequirement(req) {
+            document.getElementById('req-container').style.display = 'block';
+            document.getElementById('error-container').style.display = 'none';
+
+            document.getElementById('req-title').textContent = req.title;
+            const st = getReqStatusInfo(req.status);
+            const statusEl = document.getElementById('req-status');
+            statusEl.className = st.class;
+            statusEl.textContent = st.label;
+
+            document.getElementById('req-id').textContent = req.id;
+            document.getElementById('req-profession').textContent = getProfessionLabel(req.professionType);
+            document.getElementById('req-city').textContent = req.city;
+
+            const skills = (req.requiredSkills || []).map(s =>
+                `<span class="skill-tag">${s}</span>`
+            ).join('');
+            document.getElementById('req-skills').innerHTML = skills || '-';
+
+            document.getElementById('req-contact').textContent = req.contactName;
+            document.getElementById('req-phone').textContent = maskPhone(req.contactPhone);
+            document.getElementById('req-desc').textContent = req.description || '-';
+            document.getElementById('req-time').textContent = formatTime(req.createTime);
+
+            if (req.selectedProviderId) {
+                selectedProviderId = req.selectedProviderId;
+            }
+        }
+
+        async function loadRecommend() {
+            const id = getReqId();
+            try {
+                const [results, stats] = await Promise.all([
+                    request('/requirements/' + id + '/recommend'),
+                    request('/requirements/' + id + '/recommend-stats')
+                ]);
+                recommendResults = results;
+                renderRecommendStats(stats);
+                renderRecommendList();
+                updateSelectedSummary();
+            } catch (e) {
+                document.getElementById('recommend-list').innerHTML =
+                    '<div class="empty">推荐加载失败：' + e.message + '</div>';
+            }
+        }
+
+        function refreshRecommend() {
+            loadRecommend();
+            showToast('推荐已刷新', 'success');
+        }
+
+        function renderRecommendStats(stats) {
+            const html = `
+                <div class="stat-item">同城同职业服务商：<span class="stat-num">${stats.totalInCityProfession}</span> 人</div>
+                <div class="stat-item">已认证：<span class="stat-num" style="color:#52c41a;">${stats.approved}</span> 人</div>
+                <div class="stat-item">待审核：<span class="stat-num" style="color:#fa8c16;">${stats.pending}</span> 人</div>
+                <div class="stat-item">已驳回：<span class="stat-num" style="color:#ff4d4f;">${stats.rejected}</span> 人</div>
+                <div class="stat-item">未提交：<span class="stat-num" style="color:#999;">${stats.notSubmitted}</span> 人</div>
+                <div class="stat-item">技能匹配(已认证)：<span class="stat-num" style="color:#722ed1;">${stats.skillMatched}</span> 人</div>
+            `;
+            document.getElementById('recommend-stats').innerHTML = html;
+        }
+
+        function renderRecommendList() {
+            const skillFilter = document.getElementById('filter-skill').value;
+
+            let filtered = [...recommendResults];
+
+            if (skillFilter === 'matched') {
+                filtered = filtered.filter(r => r.matchedSkills && r.matchedSkills.length > 0);
+            } else if (skillFilter === 'allMatched') {
+                filtered = filtered.filter(r =>
+                    r.matchedSkills && currentReq.requiredSkills &&
+                    r.matchedSkills.length === currentReq.requiredSkills.length
+                );
+            }
+
+            const listEl = document.getElementById('recommend-list');
+            if (filtered.length === 0) {
+                let reason = '暂无已认证且符合条件的服务商';
+                listEl.innerHTML = `
+                    <div class="recommend-empty">
+                        暂无符合条件的推荐服务商
+                        <div class="empty-reason">${reason}</div>
+                        <div class="empty-reason" style="margin-top:4px;">准入条件：已认证 + 职业匹配 + 同城 + 技能匹配</div>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = filtered.map((r, idx) => {
+                const p = r.provider;
+                const isSelected = selectedProviderId === p.id;
+                const st = getStatusInfo(p.verifyStatus);
+
+                const matchedSkillsHtml = (r.matchedSkills || []).map(s =>
+                    `<span class="skill-tag skill-tag-matched">${s}</span>`
+                ).join('');
+
+                const missingSkillsHtml = (r.missingSkills || []).map(s =>
+                    `<span class="skill-tag skill-tag-missing">${s}</span>`
+                ).join('');
+
+                return `
+                    <div class="provider-card ${isSelected ? 'selected' : ''}" onclick="selectProvider('${p.id}')">
+                        <div class="provider-card-header">
+                            <div>
+                                <div class="provider-card-name">${p.name} <span class="${st.class}" style="font-size:12px;padding:2px 8px;">${st.label}</span></div>
+                                <div class="provider-card-sub">${p.id} · ${getProfessionLabel(p.professionType)} · ${p.city}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="match-score">${r.matchScore}</div>
+                                <div class="match-score-label">匹配度</div>
+                            </div>
+                        </div>
+                        <div class="match-reason">✓ ${r.matchReason}</div>
+                        <div class="provider-card-skills">
+                            ${matchedSkillsHtml}
+                            ${missingSkillsHtml}
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#666;">
+                            <span>资料完整度：${p.completeness}%</span>
+                            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); viewProvider('${p.id}')">查看详情</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectProvider(providerId) {
+            selectedProviderId = providerId;
+            renderRecommendList();
+            updateSelectedSummary();
+        }
+
+        function updateSelectedSummary() {
+            if (!selectedProviderId) {
+                document.getElementById('selected-summary').style.display = 'none';
+                return;
+            }
+            const r = recommendResults.find(x => x.provider.id === selectedProviderId);
+            if (!r) {
+                document.getElementById('selected-summary').style.display = 'none';
+                return;
+            }
+            const p = r.provider;
+            document.getElementById('selected-summary').style.display = 'block';
+            document.getElementById('sel-name').textContent = p.name;
+            document.getElementById('sel-phone').textContent = maskPhone(p.phone);
+            document.getElementById('sel-profession').textContent = getProfessionLabel(p.professionType);
+            document.getElementById('sel-city').textContent = p.city;
+            const st = getStatusInfo(p.verifyStatus);
+            document.getElementById('sel-status').innerHTML = `<span class="${st.class}" style="font-size:12px;padding:2px 8px;">${st.label}</span>`;
+            document.getElementById('sel-complete').textContent = p.completeness + '%';
+            const skills = (p.skillTags || []).map(s =>
+                `<span class="skill-tag">${s}</span>`
+            ).join('');
+            document.getElementById('sel-skills').innerHTML = skills || '-';
+        }
+
+        function viewProvider(id) {
+            window.open('detail.html?id=' + id, '_blank');
+        }
+
+        (async function init() {
+            await loadRequirement();
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>需求管理 - 中介平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <div class="logo">中</div>
+            <span>社区服务中介平台</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">服务商管理</a>
+            <a href="orders.html" class="active">需求管理</a>
+            <a href="form.html">入驻资料</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <h1 class="page-title">需求管理工作台</h1>
+
+        <div id="stats-container"></div>
+
+        <div class="card">
+            <div class="card-title">
+                <span>需求列表</span>
+                <button class="btn btn-primary" onclick="goToCreate()">+ 发布需求</button>
+            </div>
+
+            <div class="filter-bar">
+                <div class="form-group search-group">
+                    <label class="form-label">关键词搜索</label>
+                    <input type="text" class="form-input" id="keyword" placeholder="需求标题 / 描述 / 联系人">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">需求状态</label>
+                    <select class="form-select" id="status">
+                        <option value="">全部状态</option>
+                        <option value="OPEN">进行中</option>
+                        <option value="MATCHED">已匹配</option>
+                        <option value="CLOSED">已关闭</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">服务类型</label>
+                    <select class="form-select" id="professionType">
+                        <option value="">全部职业</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">服务城市</label>
+                    <select class="form-select" id="cityFilter">
+                        <option value="">全部城市</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-primary" onclick="loadRequirements()">搜索</button>
+                    <button class="btn" onclick="resetFilters()" style="margin-left:8px;">重置</button>
+                </div>
+            </div>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>需求编号</th>
+                        <th>需求标题</th>
+                        <th>服务类型</th>
+                        <th>服务城市</th>
+                        <th>所需技能</th>
+                        <th>联系人</th>
+                        <th>状态</th>
+                        <th>发布时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="req-list">
+                    <tr><td colspan="9" class="empty">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="js/common.js?v=2"></script>
+    <script>
+        const REQ_STATUS_MAP = {
+            OPEN: { label: '进行中', class: 'status-tag status-blue' },
+            MATCHED: { label: '已匹配', class: 'status-tag status-green' },
+            CLOSED: { label: '已关闭', class: 'status-tag status-gray' }
+        };
+
+        function getReqStatusInfo(status) {
+            return REQ_STATUS_MAP[status] || { label: status, class: 'status-tag status-gray' };
+        }
+
+        async function loadDict() {
+            try {
+                const professions = await request('/dict/profession-types');
+                const sel = document.getElementById('professionType');
+                professions.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.value;
+                    opt.textContent = p.label;
+                    sel.appendChild(opt);
+                });
+
+                const cities = await request('/dict/cities');
+                const citySel = document.getElementById('cityFilter');
+                cities.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    citySel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('加载字典失败:', e);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const stats = await request('/requirements/statistics');
+                const html = `
+                    <div class="stats-grid">
+                        <div class="stat-card stat-total">
+                            <div class="stat-label">总需求数</div>
+                            <div class="stat-value">${stats.total}</div>
+                        </div>
+                        <div class="stat-card stat-pending">
+                            <div class="stat-label">进行中</div>
+                            <div class="stat-value">${stats.open}</div>
+                        </div>
+                        <div class="stat-card stat-approved">
+                            <div class="stat-label">已匹配</div>
+                            <div class="stat-value">${stats.matched}</div>
+                        </div>
+                        <div class="stat-card stat-rejected">
+                            <div class="stat-label">已关闭</div>
+                            <div class="stat-value">${stats.closed}</div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('stats-container').innerHTML = html;
+            } catch (e) {
+                console.error('加载统计失败:', e);
+            }
+        }
+
+        async function loadRequirements() {
+            const keyword = document.getElementById('keyword').value;
+            const status = document.getElementById('status').value;
+            const professionType = document.getElementById('professionType').value;
+            const city = document.getElementById('cityFilter').value;
+
+            const params = new URLSearchParams();
+            if (keyword) params.set('keyword', keyword);
+            if (status) params.set('status', status);
+            if (professionType) params.set('professionType', professionType);
+            if (city) params.set('city', city);
+
+            try {
+                const list = await request('/requirements?' + params.toString());
+                const tbody = document.getElementById('req-list');
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无数据</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = list.map(r => {
+                    const st = getReqStatusInfo(r.status);
+                    const skills = (r.requiredSkills || []).map(s =>
+                        `<span class="skill-tag">${s}</span>`
+                    ).join('');
+                    return `
+                        <tr>
+                            <td>${r.id}</td>
+                            <td>${r.title}</td>
+                            <td>${getProfessionLabel(r.professionType)}</td>
+                            <td>${r.city}</td>
+                            <td><div class="skill-tags">${skills || '-'}</div></td>
+                            <td>${r.contactName}</td>
+                            <td><span class="${st.class}">${st.label}</span></td>
+                            <td>${formatTime(r.createTime)}</td>
+                            <td class="actions">
+                                <button class="btn btn-sm btn-primary" onclick="goToDetail('${r.id}')">查看推荐</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                document.getElementById('req-list').innerHTML =
+                    '<tr><td colspan="9" class="empty">加载失败：' + e.message + '</td></tr>';
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('keyword').value = '';
+            document.getElementById('status').value = '';
+            document.getElementById('professionType').value = '';
+            document.getElementById('cityFilter').value = '';
+            loadRequirements();
+        }
+
+        function goToDetail(id) {
+            window.location.href = 'order-detail.html?id=' + id;
+        }
+
+        function goToCreate() {
+            showToast('发布需求功能可在详情页体验推荐流程', 'info');
+        }
+
+        (async function init() {
+            await loadDict();
+            await loadStats();
+            await loadRequirements();
+        })();
+    </script>
+</body>
+</html>
